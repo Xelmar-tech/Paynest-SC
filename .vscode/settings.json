@@ -1,9 +1,5 @@
 {
   "solidity.packageDefaultDependenciesContractsDirectory": "src",
   "solidity.packageDefaultDependenciesDirectory": "lib",
-  "solidity.remappings": [
-    "forge-std/=lib/forge-std/src/",
-    "solmate/=lib/solmate/src/",
-    "ds-test/=lib/solmate/lib/ds-test/src/"
-  ]
+  "solidity.remappings": ["forge-std/=lib/forge-std/src/"]
 }

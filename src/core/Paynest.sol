@@ -55,4 +55,10 @@ contract Paynest is IPaynest, Owner, Errors {
     function getFixedFee() external view override returns (uint) {
         return fixedFee;
     }
+
+    function updateFixedFee(uint fee) external override {
+        onlyOwner();
+
+        fixedFee = fee;
+    }
 }

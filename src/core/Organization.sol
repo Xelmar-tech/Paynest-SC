@@ -48,6 +48,8 @@ contract Organization is IOrg, Errors, Owner, ReentrancyGuard {
     function createSchedule(string calldata username, uint256 amount, address token, uint40 oneTimePayoutDate) external payable override {
         onlyOwner();
 
+        Registry.getUserAddress(username);
+
         if (Paynest.isSupportedToken(token) == false) revert TokenNotSupported();
         if (amount == 0) revert InvalidAmount();
 
@@ -66,6 +68,8 @@ contract Organization is IOrg, Errors, Owner, ReentrancyGuard {
 
     function createStream(string calldata username, uint256 amount, address token, uint40 endStream) external payable override {
         onlyOwner();
+
+        Registry.getUserAddress(username);
 
         if (Paynest.isSupportedToken(token) == false) revert TokenNotSupported();
         if (amount == 0) revert InvalidAmount();

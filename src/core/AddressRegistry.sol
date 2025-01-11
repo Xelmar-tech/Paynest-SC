@@ -5,7 +5,7 @@ import "../interfaces/IRegistry.sol";
 import "../utils/Errors.sol";
 import "../utils/Owner.sol";
 
-contract Oracle is IRegistry, Owner, Errors {
+contract Registry is IRegistry, Owner, Errors {
     mapping(string => address) private userDirectory;
 
     constructor() Owner(msg.sender)  {}

@@ -80,4 +80,11 @@ interface IPaynest {
      * @return The fixed subscription fee as an unsigned integer.
      */
     function getFixedFee() external view returns (uint);
+    
+    /**
+     * @notice Sets the fixed subscription fee for the Paynest system.
+     * @dev The value represents the base fee charged for maintaining active subscriptions.
+     * @param fee The fixed subscription fee as an unsigned integer.
+     */
+    function updateFixedFee(uint fee) external;
 }
