@@ -47,20 +47,20 @@ interface IPaynest {
     function deployOrganization(string calldata orgName) external;
 
     /**
-     * @notice Claims or redeems accumulated subscription fees for a specific token.
-     * @dev Allows authorized addresses to withdraw fees collected in the specified token 
+     * @notice Claims or redeems accumulated subscription fees.
+     * @dev Allows authorized addresses to withdraw fees collected in ETH
      *      from the Paynest system to the contract owner or treasury address.
-     * @param tokenAddr The address of the token for which fees are to be redeemed.
      * @custom:access Only callable by authorized addresses, typically the contract owner.
      * @custom:security Ensures the caller is authorized and the token is supported.
      */
-    function redeemSubscriptionFees(address tokenAddr) external;
+    function redeemSubscriptionFees() external;
 
     /**
      * @notice Returns the list of supported tokens.
-     * @return A list of supported token addresses.
+     * @param token The address of the token contract to be checked.
+     * @return Boolean to indicate if token is supported.
      */
-    function getSupportedTokens() external view returns (address[] memory);
+    function isSupportedToken(address token) external view returns (bool);
 
     /**
      * @notice Checks if the caller is authorized for emergency withdrawal from the organization.
@@ -72,7 +72,12 @@ interface IPaynest {
      * @return True if the caller is the Paynest owner or authorized and token is not in list of supportedTokens, otherwise false.
      */
     function canEmergencyWithdraw(address caller, address tokenAddr) external view returns (bool);
-    
 
-
+    /**
+     * @notice Retrieves the fixed subscription fee for the Paynest system.
+     * @dev The returned value represents the base fee charged for maintaining active subscriptions.
+     *      A value of 0 indicates that no fee is required.
+     * @return The fixed subscription fee as an unsigned integer.
+     */
+    function getFixedFee() external view returns (uint);
 }

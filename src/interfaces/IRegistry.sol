@@ -2,10 +2,10 @@
 pragma solidity ^0.8.13;
 
 /**
- * @title Oracle Interface
- * @dev Interface for interacting with the Oracle contract that updates user wallet addresses.
+ * @title Address Registry Interface
+ * @dev Interface for interacting with the Registry contract that updates user wallet addresses.
  */
-interface IOracle {
+interface IRegistry {
 
     // Event for address update
     event UserAddressUpdated(string indexed username, address newAddress);
