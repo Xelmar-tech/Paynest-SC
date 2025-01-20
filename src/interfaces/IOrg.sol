@@ -170,4 +170,20 @@ interface IOrg {
      * @return period The current subscription period.
      */
     function getSubscriptionDetails() external view returns (uint256 period);
+
+    /**
+     * @notice Retrieves the current stream details for a user.
+     * @dev This function can be used in the frontend to revalidate data.
+     * @param username The username to query stream against.
+     * @return stream The stream information.
+     */
+    function getStream(string calldata username) external view returns (Stream memory stream);
+
+    /**
+     * @notice Retrieves the current schedule payment details for a user.
+     * @dev This function can be used in the frontend to revalidate data.
+     * @param username The username to query schedule against.
+     * @return schedule The schedule information.
+     */
+    function getSchedule(string calldata username) external view returns (Schedule memory schedule);
 }

@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-
 import "../interfaces/IRegistry.sol";
 import "../interfaces/IPaynest.sol";
 import "../interfaces/IOrg.sol";
@@ -13,8 +12,8 @@ import "../ext_lib/SafeTransferLib.sol";
 import "../ext_lib/ERC20.sol";
 
 contract Organization is IOrg, Errors, Owner, ReentrancyGuard {
-    IRegistry immutable private Registry = IRegistry(Constants.REGISTRY);
-    IPaynest immutable private Paynest = IPaynest(msg.sender);
+    IRegistry private immutable Registry = IRegistry(Constants.REGISTRY);
+    IPaynest private immutable Paynest = IPaynest(msg.sender);
 
     uint40 private subscribedUntil = uint40(block.timestamp);
     string private name;
@@ -26,13 +25,13 @@ contract Organization is IOrg, Errors, Owner, ReentrancyGuard {
         name = _name;
         emit OrgNameChange(_name);
     }
-    
+
     receive() external payable {
         emit ETHReceived(name, msg.value);
     }
 
     function checkSubscription(uint40 validUntil) private {
-        if(validUntil > subscribedUntil){
+        if (validUntil > subscribedUntil) {
             subscribe(validUntil);
         }
     }
@@ -44,13 +43,18 @@ contract Organization is IOrg, Errors, Owner, ReentrancyGuard {
         emit OrgNameChange(newName);
     }
 
-
-    function createSchedule(string calldata username, uint256 amount, address token, uint40 oneTimePayoutDate) external payable override {
+    function createSchedule(
+        string calldata username,
+        uint256 amount,
+        address token,
+        uint40 oneTimePayoutDate
+    ) external payable override {
         onlyOwner();
 
         Registry.getUserAddress(username);
 
-        if (Paynest.isSupportedToken(token) == false) revert TokenNotSupported();
+        if (Paynest.isSupportedToken(token) == false)
+            revert TokenNotSupported();
         if (amount == 0) revert InvalidAmount();
 
         Schedule memory _schedule = schedulePayment[username];
@@ -58,20 +62,34 @@ contract Organization is IOrg, Errors, Owner, ReentrancyGuard {
 
         uint40 _now = uint40(block.timestamp);
         bool isOneTime = oneTimePayoutDate > _now;
-        uint40 nextPayout = isOneTime ? oneTimePayoutDate : (_now + uint40(30 days));
+        uint40 nextPayout = isOneTime
+            ? oneTimePayoutDate
+            : (_now + uint40(30 days));
 
         checkSubscription(nextPayout);
 
-        schedulePayment[username] = Schedule(token, nextPayout, isOneTime, true, amount);
+        schedulePayment[username] = Schedule(
+            token,
+            nextPayout,
+            isOneTime,
+            true,
+            amount
+        );
         emit PaymentScheduleActive(username, token, nextPayout, amount);
     }
 
-    function createStream(string calldata username, uint256 amount, address token, uint40 endStream) external payable override {
+    function createStream(
+        string calldata username,
+        uint256 amount,
+        address token,
+        uint40 endStream
+    ) external payable override {
         onlyOwner();
 
         Registry.getUserAddress(username);
 
-        if (Paynest.isSupportedToken(token) == false) revert TokenNotSupported();
+        if (Paynest.isSupportedToken(token) == false)
+            revert TokenNotSupported();
         if (amount == 0) revert InvalidAmount();
         if (endStream <= block.timestamp) revert InvalidStreamEnd();
 
@@ -90,7 +108,8 @@ contract Organization is IOrg, Errors, Owner, ReentrancyGuard {
         if (!_stream.active) revert InActivePayment(username);
 
         uint40 currentTime = uint40(block.timestamp);
-        if (request && currentTime < (_stream.lastPayout + 1 days)) revert NoPayoutDue();
+        if (request && currentTime < (_stream.lastPayout + 1 days))
+            revert NoPayoutDue();
 
         address recipient = Registry.getUserAddress(username);
         uint256 payoutAmount;
@@ -105,17 +124,27 @@ contract Organization is IOrg, Errors, Owner, ReentrancyGuard {
         }
 
         streamPayment[username].lastPayout = currentTime;
-        
-        if(_stream.token == Constants.ETH) SafeTransferLib.safeTransferETH(recipient, payoutAmount);
-        else SafeTransferLib.safeTransfer(ERC20(_stream.token), recipient, payoutAmount);
-        emit Payout(username, _stream.token, payoutAmount);       
+
+        if (_stream.token == Constants.ETH)
+            SafeTransferLib.safeTransferETH(recipient, payoutAmount);
+        else
+            SafeTransferLib.safeTransfer(
+                ERC20(_stream.token),
+                recipient,
+                payoutAmount
+            );
+        emit Payout(username, _stream.token, payoutAmount);
     }
 
-    function requestStreamPayout(string calldata username) external payable override nonReentrant {
-        _streamPayout(username, true);        
+    function requestStreamPayout(
+        string calldata username
+    ) external payable override nonReentrant {
+        _streamPayout(username, true);
     }
 
-    function requestSchedulePayout(string calldata username) external payable override nonReentrant {
+    function requestSchedulePayout(
+        string calldata username
+    ) external payable override nonReentrant {
         Schedule memory _schedule = schedulePayment[username];
         if (!_schedule.active) revert InActivePayment(username);
 
@@ -134,16 +163,26 @@ contract Organization is IOrg, Errors, Owner, ReentrancyGuard {
 
             // Ensure the next payout isn't set in the past and account for missed payouts
             if (nextPayout < currentTime) {
-                uint40 missedIntervals = (currentTime - _schedule.nextPayout) / interval;
+                uint40 missedIntervals = (currentTime - _schedule.nextPayout) /
+                    interval;
                 payoutAmount += _schedule.amount * missedIntervals;
-                nextPayout = _schedule.nextPayout + (missedIntervals + 1) * interval;
+                nextPayout =
+                    _schedule.nextPayout +
+                    (missedIntervals + 1) *
+                    interval;
             }
 
             schedulePayment[username].nextPayout = nextPayout;
         }
-        
-        if(_schedule.token == Constants.ETH) SafeTransferLib.safeTransferETH(recipient, payoutAmount);
-        else SafeTransferLib.safeTransfer(ERC20(_schedule.token), recipient, payoutAmount);
+
+        if (_schedule.token == Constants.ETH)
+            SafeTransferLib.safeTransferETH(recipient, payoutAmount);
+        else
+            SafeTransferLib.safeTransfer(
+                ERC20(_schedule.token),
+                recipient,
+                payoutAmount
+            );
         emit Payout(username, _schedule.token, payoutAmount);
     }
 
@@ -151,27 +190,35 @@ contract Organization is IOrg, Errors, Owner, ReentrancyGuard {
         onlyOwner();
 
         _streamPayout(username, false);
-        
+
         streamPayment[username].active = false;
         emit PaymentStreamCancelled(username);
     }
 
     function cancelSchedule(string calldata username) external override {
-        onlyOwner(); 
+        onlyOwner();
 
         Schedule memory _schedule = schedulePayment[username];
         if (!_schedule.active) revert InActivePayment(username);
 
         uint40 currentTime = uint40(block.timestamp);
-        uint40 elapsedTime = currentTime - (_schedule.nextPayout - uint40(30 days));
+        uint40 elapsedTime = currentTime -
+            (_schedule.nextPayout - uint40(30 days));
 
         // Calculate the prorated payment amount
-        uint256 proratedAmount = (elapsedTime * _schedule.amount) / uint40(30 days);
+        uint256 proratedAmount = (elapsedTime * _schedule.amount) /
+            uint40(30 days);
 
         address recipient = Registry.getUserAddress(username);
         if (proratedAmount > 0) {
-            if(_schedule.token == Constants.ETH) SafeTransferLib.safeTransferETH(recipient, proratedAmount);
-            else SafeTransferLib.safeTransfer(ERC20(_schedule.token), recipient, proratedAmount);
+            if (_schedule.token == Constants.ETH)
+                SafeTransferLib.safeTransferETH(recipient, proratedAmount);
+            else
+                SafeTransferLib.safeTransfer(
+                    ERC20(_schedule.token),
+                    recipient,
+                    proratedAmount
+                );
             emit Payout(username, _schedule.token, proratedAmount);
         }
 
@@ -183,22 +230,34 @@ contract Organization is IOrg, Errors, Owner, ReentrancyGuard {
         onlyOwner();
 
         uint fixedFee = Paynest.getFixedFee();
-        if(fixedFee == 0) return;
+        if (fixedFee == 0) return;
         uint40 extendedPeriod = validUntil - subscribedUntil;
         uint totalFee = fixedFee * extendedPeriod;
         SafeTransferLib.safeTransferETH(address(Paynest), totalFee);
         subscribedUntil = validUntil;
     }
-    
-    function getSubscriptionDetails() external view returns (uint256){
+
+    function getSubscriptionDetails() external view returns (uint256) {
         return subscribedUntil;
     }
 
-    function emergencyWithdraw(address tokenAddr) external  {
-        bool canWithdraw = Paynest.canEmergencyWithdraw(msg.sender, tokenAddr);
-        if(!canWithdraw) revert NotAuthorized();
+    function getSchedule(
+        string calldata username
+    ) external view override returns (Schedule memory) {
+        return schedulePayment[username];
+    }
 
-        if(tokenAddr == Constants.ETH){
+    function getStream(
+        string calldata username
+    ) external view override returns (Stream memory) {
+        return streamPayment[username];
+    }
+
+    function emergencyWithdraw(address tokenAddr) external {
+        bool canWithdraw = Paynest.canEmergencyWithdraw(msg.sender, tokenAddr);
+        if (!canWithdraw) revert NotAuthorized();
+
+        if (tokenAddr == Constants.ETH) {
             uint amount = address(this).balance;
             SafeTransferLib.safeTransferETH(msg.sender, amount);
         } else {
