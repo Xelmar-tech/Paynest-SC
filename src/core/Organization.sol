@@ -136,6 +136,32 @@ contract Organization is IOrg, Errors, Owner, ReentrancyGuard {
         emit Payout(username, _stream.token, payoutAmount);
     }
 
+    function _incompleteSchedulePayout(string calldata username) private {
+        Schedule memory _schedule = schedulePayment[username];
+        if (!_schedule.active) revert InActivePayment(username);
+
+        uint40 currentTime = uint40(block.timestamp);
+        uint40 elapsedTime = currentTime -
+            (_schedule.nextPayout - uint40(30 days));
+
+        // Calculate the prorated payment amount
+        uint256 proratedAmount = (elapsedTime * _schedule.amount) /
+            uint40(30 days);
+
+        address recipient = Registry.getUserAddress(username);
+        if (proratedAmount > 0) {
+            if (_schedule.token == Constants.ETH)
+                SafeTransferLib.safeTransferETH(recipient, proratedAmount);
+            else
+                SafeTransferLib.safeTransfer(
+                    ERC20(_schedule.token),
+                    recipient,
+                    proratedAmount
+                );
+            emit Payout(username, _schedule.token, proratedAmount);
+        }
+    }
+
     function requestStreamPayout(
         string calldata username
     ) external payable override nonReentrant {
@@ -198,32 +224,44 @@ contract Organization is IOrg, Errors, Owner, ReentrancyGuard {
     function cancelSchedule(string calldata username) external override {
         onlyOwner();
 
-        Schedule memory _schedule = schedulePayment[username];
-        if (!_schedule.active) revert InActivePayment(username);
-
-        uint40 currentTime = uint40(block.timestamp);
-        uint40 elapsedTime = currentTime -
-            (_schedule.nextPayout - uint40(30 days));
-
-        // Calculate the prorated payment amount
-        uint256 proratedAmount = (elapsedTime * _schedule.amount) /
-            uint40(30 days);
-
-        address recipient = Registry.getUserAddress(username);
-        if (proratedAmount > 0) {
-            if (_schedule.token == Constants.ETH)
-                SafeTransferLib.safeTransferETH(recipient, proratedAmount);
-            else
-                SafeTransferLib.safeTransfer(
-                    ERC20(_schedule.token),
-                    recipient,
-                    proratedAmount
-                );
-            emit Payout(username, _schedule.token, proratedAmount);
-        }
+        // _incompleteSchedulePayout(username);
 
         schedulePayment[username].active = false;
         emit PaymentScheduleCancelled(username);
+    }
+
+    function editStream(
+        string calldata username,
+        uint amount
+    ) external override {
+        onlyOwner();
+
+        if (amount == 0) revert InvalidAmount();
+
+        Stream memory _stream = streamPayment[username];
+        if (!_stream.active) revert InActivePayment(username);
+
+        streamPayment[username].amount = amount;
+        emit StreamUpdated(username, amount);
+    }
+
+    function editSchedule(
+        string calldata username,
+        uint amount
+    ) external override {
+        onlyOwner();
+
+        if (amount == 0) revert InvalidAmount();
+
+        Schedule memory _schedule = schedulePayment[username];
+        if (!_schedule.active) revert InActivePayment(username);
+
+        uint40 currentTimestamp = uint40(block.timestamp);
+        if ((_schedule.nextPayout - currentTimestamp) < 3 days)
+            revert NoEditAccess();
+
+        schedulePayment[username].amount = amount;
+        emit ScheduleUpdated(username, amount);
     }
 
     function subscribe(uint40 validUntil) public {

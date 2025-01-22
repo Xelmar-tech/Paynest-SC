@@ -42,7 +42,7 @@ interface IOrg {
     /**
      * @dev Emitted when a payment schedule becomes active.
      * @param username The username associated with the payment schedule.
-      * @param token The address of the token used for the payments.
+     * @param token The address of the token used for the payments.
      * @param nextPayout The timestamp of the next scheduled payout.
      * @param amount The amount to be paid at the next payout.
      */
@@ -52,7 +52,7 @@ interface IOrg {
         uint40 indexed nextPayout,
         uint256 amount
     );
-    
+
     /**
      * @dev Emitted when a payment stream becomes active.
      * @param username The username associated with the payment stream.
@@ -67,14 +67,17 @@ interface IOrg {
         uint256 amount
     );
 
-
     /**
      * @dev Emitted when a payout is successfully processed.
      * @param username The username associated with the stream.
      * @param token The token address used for the payout.
      * @param amount The amount paid out.
      */
-    event Payout(string indexed username, address indexed token, uint256 amount);
+    event Payout(
+        string indexed username,
+        address indexed token,
+        uint256 amount
+    );
 
     /**
      * @dev Emitted when a payment stream is canceled.
@@ -89,13 +92,30 @@ interface IOrg {
     event PaymentScheduleCancelled(string indexed username);
 
     /**
+     * @dev Emitted when a stream is updated with a new amount.
+     * This event logs the updated stream information for a given username.
+     *
+     * @param username The username of the user whose stream has been updated.
+     * @param amount The new amount set for the stream.
+     */
+    event StreamUpdated(string indexed username, uint amount);
+
+    /**
+     * @dev Emitted when a payment schedule is updated with a new amount.
+     * This event logs the updated schedule information for a given username.
+     *
+     * @param username The username of the user whose schedule has been updated.
+     * @param amount The new amount set for the schedule.
+     */
+    event ScheduleUpdated(string indexed username, uint amount);
+
+    /**
      * @notice Event for Organization Name tracking Off chain
      * @param name The new name of the org
      */
     event OrgNameChange(string name);
     event ETHReceived(string name, uint amount);
 
-    
     /**
      * @notice Creates a payment stream or schedule for an employee or recipient.
      * @dev This function allows an organization to set up recurring payments to an address.
@@ -106,7 +126,12 @@ interface IOrg {
      * @param oneTimePayoutDate Timestamp of a payment to be made once
             As would a contractor payment would be made.
      */
-    function createSchedule(string calldata username, uint256 amount, address token, uint40 oneTimePayoutDate) external payable;
+    function createSchedule(
+        string calldata username,
+        uint256 amount,
+        address token,
+        uint40 oneTimePayoutDate
+    ) external payable;
 
     /**
      * @notice Creates a real-time payment stream for a recipient.
@@ -116,7 +141,12 @@ interface IOrg {
      * @param token The address of the token to be streamed.
      * @param endStream The timestamp when the stream ends.
      */
-    function createStream(string calldata username, uint256 amount, address token, uint40 endStream) external payable;
+    function createStream(
+        string calldata username,
+        uint256 amount,
+        address token,
+        uint40 endStream
+    ) external payable;
 
     /**
      * @notice Requests a payout of accumulated funds.
@@ -139,7 +169,6 @@ interface IOrg {
      */
     function cancelStream(string calldata username) external;
 
-    
     /**
      * @notice Cancels an active payment schedule with prorated payout for the current interval.
      * @dev Computes and transfers the prorated amount for the current interval, then disables the schedule.
@@ -147,10 +176,46 @@ interface IOrg {
      */
     function cancelSchedule(string calldata username) external;
 
+    /**
+     * @dev Edits the amount for an active stream for a given user.
+     * Only the owner can call this function.
+     * Reverts if the amount is zero or the payment stream is not active.
+     *
+     * @param username The username of the user whose stream is to be edited.
+     * @param amount The new amount to set for the stream.
+     *
+     * Requirements:
+     * - The caller must be the owner of the contract.
+     * - The amount must be non-zero.
+     * - The stream for the given username must be active.
+     *
+     * Emits:
+     * - A `StreamUpdated` event with the updated stream information.
+     */
+    function editStream(string calldata username, uint amount) external;
+
+    /**
+     * @dev Edits the amount for a schedule payment for a given user.
+     * Only the owner can call this function.
+     * Reverts if the amount is zero, the payment schedule is not active, or the next payout is within 3 days.
+     *
+     * @param username The username of the user whose schedule is to be edited.
+     * @param amount The new amount to set for the schedule.
+     *
+     * Requirements:
+     * - The caller must be the owner of the contract.
+     * - The amount must be non-zero.
+     * - The schedule for the given username must be active.
+     * - The time difference between the current timestamp and the next payout must be greater than 3 days.
+     *
+     * Emits:
+     * - A `ScheduleUpdated` event with the updated schedule information.
+     */
+    function editSchedule(string calldata username, uint amount) external;
 
     /**
      * @notice Allows the Paynest owner to withdraw any funds that were accidentally sent to the Org contract.
-     * @dev This function can only be called by the Paynest owner to withdraw tokens 
+     * @dev This function can only be called by the Paynest owner to withdraw tokens
      *      that were mistakenly sent to the Org contract.
      * @param tokenAddr The address of the token to be withdrawn.
      */
@@ -177,7 +242,9 @@ interface IOrg {
      * @param username The username to query stream against.
      * @return stream The stream information.
      */
-    function getStream(string calldata username) external view returns (Stream memory stream);
+    function getStream(
+        string calldata username
+    ) external view returns (Stream memory stream);
 
     /**
      * @notice Retrieves the current schedule payment details for a user.
@@ -185,5 +252,7 @@ interface IOrg {
      * @param username The username to query schedule against.
      * @return schedule The schedule information.
      */
-    function getSchedule(string calldata username) external view returns (Schedule memory schedule);
+    function getSchedule(
+        string calldata username
+    ) external view returns (Schedule memory schedule);
 }

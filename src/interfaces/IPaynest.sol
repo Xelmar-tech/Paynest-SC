@@ -4,11 +4,10 @@ pragma solidity ^0.8.13;
 /**
  * @title Paynest Interface
  * @dev Interface for interacting with the Paynest contract.
- * @notice Provides methods for managing supported tokens, deploying organizations, 
+ * @notice Provides methods for managing supported tokens, deploying organizations,
  *         and handling subscription fees.
  */
 interface IPaynest {
-
     /**
      * @notice Emitted when a new organization is deployed.
      * @param orgAddress The address of the deployed organization contract.
@@ -16,10 +15,9 @@ interface IPaynest {
      */
     event OrgDeployed(address indexed orgAddress, string orgName);
 
-    
     /**
      * @notice Adds support for a new token in the system.
-     * @dev Allows the contract owner to add a token address 
+     * @dev Allows the contract owner to add a token address
      *      that can be used for transactions within the Paynest system.
      * @param tokenAddr The address of the token contract to be added as supported.
      * @custom:access Only callable by authorized addresses, typically the contract owner.
@@ -28,18 +26,18 @@ interface IPaynest {
 
     /**
      * @notice Removes support for a previously added token.
-     * @dev Allows the contract owner to remove a token address 
+     * @dev Allows the contract owner to remove a token address
      *      that is no longer supported for transactions within the Paynest system.
      * @param tokenAddr The address of the token contract to be removed.
      * @custom:access Only callable by authorized addresses, typically the contract owner.
-     * @custom:warning Ensure all transactions involving this token are settled 
+     * @custom:warning Ensure all transactions involving this token are settled
      *                 before removing support to avoid disruptions.
      */
     function removeTokenSupport(address tokenAddr) external;
 
     /**
      * @notice Deploys a new organization within the Paynest system.
-     * @dev Creates a new organization contract instance with the specified name 
+     * @dev Creates a new organization contract instance with the specified name
      *      and links it to the Paynest system for payroll and subscription management.
      * @param orgName The name of the organization to be deployed.
      * @custom:access Callable by addresses yet to hit the limit of Orgs to create.
@@ -71,7 +69,10 @@ interface IPaynest {
      * @param tokenAddr The token address to withdraw from
      * @return True if the caller is the Paynest owner or authorized and token is not in list of supportedTokens, otherwise false.
      */
-    function canEmergencyWithdraw(address caller, address tokenAddr) external view returns (bool);
+    function canEmergencyWithdraw(
+        address caller,
+        address tokenAddr
+    ) external view returns (bool);
 
     /**
      * @notice Retrieves the fixed subscription fee for the Paynest system.
@@ -80,7 +81,7 @@ interface IPaynest {
      * @return The fixed subscription fee as an unsigned integer.
      */
     function getFixedFee() external view returns (uint);
-    
+
     /**
      * @notice Sets the fixed subscription fee for the Paynest system.
      * @dev The value represents the base fee charged for maintaining active subscriptions.

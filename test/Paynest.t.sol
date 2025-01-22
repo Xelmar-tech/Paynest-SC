@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import {Test, console} from "forge-std/Test.sol";
+import {Test, console, Vm} from "forge-std/Test.sol";
 import "../src/core/Paynest.sol";
 import "../src/interfaces/IPaynest.sol";
 import "../src/utils/Errors.sol";
@@ -13,11 +13,10 @@ contract PaynestTest is Test {
     address public token1;
     address public token2;
 
-    
     receive() external payable {}
 
     function setUp() public {
-        owner = address(this); 
+        owner = address(this);
         nonOwner = address(0x1); // A non-owner address
         token1 = address(0x2); // Token address 1
         token2 = address(0x3); // Token address 2
@@ -48,7 +47,9 @@ contract PaynestTest is Test {
 
         // Attempt to add the same token again
         vm.prank(owner);
-        vm.expectRevert(abi.encodeWithSelector(Errors.TokenAlreadySupported.selector));
+        vm.expectRevert(
+            abi.encodeWithSelector(Errors.TokenAlreadySupported.selector)
+        );
         paynest.addTokenSupport(token1);
     }
 
@@ -68,7 +69,9 @@ contract PaynestTest is Test {
     function test_FailRemoveUnsupportedToken() public {
         // Attempt to remove a token that hasn't been added
         vm.prank(owner);
-        vm.expectRevert(abi.encodeWithSelector(Errors.TokenNotSupported.selector));
+        vm.expectRevert(
+            abi.encodeWithSelector(Errors.TokenNotSupported.selector)
+        );
         paynest.removeTokenSupport(token1);
     }
 
@@ -107,16 +110,68 @@ contract PaynestTest is Test {
         vm.prank(owner);
         paynest.addTokenSupport(token2);
         // Verify emergency withdrawal conditions
-        bool canWithdrawUnsupported = paynest.canEmergencyWithdraw(owner, token1);
-        bool cannotWithdrawSupported = paynest.canEmergencyWithdraw(owner, token2);
+        bool canWithdrawUnsupported = paynest.canEmergencyWithdraw(
+            owner,
+            token1
+        );
+        bool cannotWithdrawSupported = paynest.canEmergencyWithdraw(
+            owner,
+            token2
+        );
 
-        assertTrue(canWithdrawUnsupported, "Owner should be able to withdraw unsupported tokens");
-        assertFalse(cannotWithdrawSupported, "Owner should not be able to withdraw supported tokens");
+        assertTrue(
+            canWithdrawUnsupported,
+            "Owner should be able to withdraw unsupported tokens"
+        );
+        assertFalse(
+            cannotWithdrawSupported,
+            "Owner should not be able to withdraw supported tokens"
+        );
     }
 
     function test_GetFixedFee() public view {
         // Get the fixed fee (expected to be zero initially)
         uint fixedFee = paynest.getFixedFee();
         assertEq(fixedFee, 0, "Initial fixed fee should be 0");
+    }
+
+    function test_DeploymentAddress() public {
+        address alice = address(1);
+        vm.prank(alice);
+
+        vm.recordLogs();
+        paynest.deployOrganization("Alice Org");
+        Vm.Log[] memory _logs = vm.getRecordedLogs();
+
+        for (uint i = 0; i < _logs.length; i++) {
+            if (
+                _logs[i].topics[0] == keccak256("OrgDeployed(address,string)")
+            ) {
+                address deployer = abi.decode(_logs[i].data, (address));
+                string memory orgName = abi.decode(_logs[i].data, (string));
+
+                console.log(deployer);
+                console.log(orgName);
+            }
+        }
+
+        address bob = address(2);
+        vm.prank(bob);
+
+        vm.recordLogs();
+        paynest.deployOrganization("Bob Org");
+        Vm.Log[] memory logs_ = vm.getRecordedLogs();
+
+        for (uint i = 0; i < logs_.length; i++) {
+            if (
+                logs_[i].topics[0] == keccak256("OrgDeployed(address,string)")
+            ) {
+                address deployer = abi.decode(logs_[i].data, (address));
+                string memory orgName = abi.decode(logs_[i].data, (string));
+
+                console.log(deployer);
+                console.log(orgName);
+            }
+        }
     }
 }
