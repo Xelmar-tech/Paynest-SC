@@ -309,7 +309,6 @@ contract OrgTest is Test {
     function testEmergencyWithdraw() public {
         vm.prank(ownerAddr);
         mockPaynest.removeTokenSupport(Constants.ETH);
-        uint256 orgBalBefore = address(org).balance;
         vm.prank(ownerAddr);
         org.emergencyWithdraw(Constants.ETH);
         assertEq(address(org).balance, 0);

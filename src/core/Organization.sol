@@ -266,7 +266,7 @@ contract Organization is IOrg, Errors, Owner, ReentrancyGuard {
 
     function subscribe(uint40 validUntil) public {
         onlyOwner();
-
+        if (validUntil < subscribedUntil) revert InvalidSubscriptionPeriod();
         uint fixedFee = Paynest.getFixedFee();
         if (fixedFee == 0) return;
         uint40 extendedPeriod = validUntil - subscribedUntil;
