@@ -29,4 +29,5 @@ abstract contract Errors {
     error InvalidStreamEnd();
     error NoPayoutDue();
     error NoEditAccess();
+    error InvalidSubscriptionPeriod();
 }
