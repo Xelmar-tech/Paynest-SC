@@ -5,7 +5,7 @@ import "../interfaces/IPaynest.sol";
 import "./Organization.sol";
 import "../utils/Errors.sol";
 import "../utils/Owner.sol";
-import "../ext_lib/SafeTransferLib.sol";
+import "../lib/SafeTransferLib.sol";
 
 
 contract Paynest is IPaynest, Owner, Errors {

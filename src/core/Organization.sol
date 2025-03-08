@@ -8,8 +8,8 @@ import "../utils/Errors.sol";
 import "../utils/Constants.sol";
 import "../utils/Owner.sol";
 import "../utils/ReentrancyGuard.sol";
-import "../ext_lib/SafeTransferLib.sol";
-import "../ext_lib/ERC20.sol";
+import "../lib/SafeTransferLib.sol";
+import "../lib/ERC20.sol";
 
 contract Organization is IOrg, Errors, Owner, ReentrancyGuard {
     IRegistry private immutable Registry = IRegistry(Constants.REGISTRY);
