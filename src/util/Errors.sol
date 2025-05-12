@@ -21,13 +21,20 @@ abstract contract Errors {
     // Directory errors
     error UserNotFound(string username);
     error IncompatibleUserAddress();
+    error UsernameAlreadyClaimed(string username);
+    error UserNotClaimor();
+    error EmptyUsernameNotAllowed();
 
     // Payment Errors
     error ActivePayment(string username);
     error InActivePayment(string username);
+    error NoActivePayment(string username);
     error InvalidAmount();
+    error InvalidEndDate();
     error InvalidStreamEnd();
     error NoPayoutDue();
     error NoEditAccess();
     error InvalidSubscriptionPeriod();
+    error InvalidInterval();
+    error InvalidFirstPaymentDate();
 }

@@ -6,9 +6,9 @@ pragma solidity ^0.8.13;
  * @dev Interface for interacting with the Registry contract that updates user wallet addresses.
  */
 interface IRegistry {
-
     // Event for address update
     event UserAddressUpdated(string indexed username, address newAddress);
+    event UsernameClaimed(string indexed username, address claimor);
 
     /**
      * @notice Updates the wallet address for a given username.
@@ -17,7 +17,10 @@ interface IRegistry {
      * @param username The username whose wallet address needs to be updated.
      * @param userAddress The new wallet address to associate with the username.
      */
-    function updateUserAddress(string calldata username, address userAddress) external;
+    function updateUserAddress(
+        string calldata username,
+        address userAddress
+    ) external;
 
     /**
      * @notice Retrieves the wallet address associated with a given username.
@@ -25,6 +28,7 @@ interface IRegistry {
      * @param username The username whose wallet address is to be retrieved.
      * @return The wallet address associated with the username.
      */
-    function getUserAddress(string calldata username) external view returns (address);
-    
+    function getUserAddress(
+        string calldata username
+    ) external view returns (address);
 }
