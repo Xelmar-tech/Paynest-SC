@@ -192,33 +192,6 @@ contract Org is IPayments, Errors, Owner, ReentrancyGuard {
         emit Payout(username, _stream.token, payoutAmount);
     }
 
-    function _incompleteSchedulePayout(string calldata username) private {
-        Schedule memory _schedule = schedulePayment[username];
-        if (!_schedule.active) revert InActivePayment(username);
-
-        uint40 currentTime = uint40(block.timestamp);
-        uint40 payoutInterval = getIntervalDuration(_schedule.interval);
-        uint40 elapsedTime = currentTime -
-            (_schedule.nextPayout - payoutInterval);
-
-        // Calculate the prorated payment amount
-        uint256 proratedAmount = (elapsedTime * _schedule.amount) /
-            payoutInterval;
-
-        address recipient = Registry.getUserAddress(username);
-        if (proratedAmount > 0) {
-            if (_schedule.token == ETH)
-                SafeTransferLib.safeTransferETH(recipient, proratedAmount);
-            else
-                SafeTransferLib.safeTransfer(
-                    ERC20(_schedule.token),
-                    recipient,
-                    proratedAmount
-                );
-            emit Payout(username, _schedule.token, proratedAmount);
-        }
-    }
-
     function requestStreamPayout(
         string calldata username
     ) external payable override nonReentrant returns (uint256 payoutAmount) {
@@ -271,12 +244,8 @@ contract Org is IPayments, Errors, Owner, ReentrancyGuard {
         emit StreamUpdated(username, amount);
     }
 
-    function cancelSchedule(
-        string calldata username,
-        bool payIncomplete
-    ) external override {
+    function cancelSchedule(string calldata username) external override {
         onlyOwner();
-        if (payIncomplete) _incompleteSchedulePayout(username);
 
         schedulePayment[username].active = false;
         emit PaymentScheduleCancelled(username);

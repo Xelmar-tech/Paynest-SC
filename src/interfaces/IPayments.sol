@@ -180,12 +180,8 @@ interface IPayments {
      * @notice Cancels an active payment schedule with prorated payout for the current interval.
      * @dev Computes and transfers the prorated amount for the current interval, then disables the schedule.
      * @param username The username associated with the payment schedule.
-     * @param payIncomplete A check to tell contract to pay username according to prorated schedule.
      */
-    function cancelSchedule(
-        string calldata username,
-        bool payIncomplete
-    ) external;
+    function cancelSchedule(string calldata username) external;
 
     /**
      * @dev Edits the amount for an active stream for a given user.

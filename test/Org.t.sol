@@ -143,7 +143,7 @@ contract OrgTest is Test {
         registry.updateUserAddress(username, user);
         vm.stopPrank();
 
-        uint40 end = uint40(block.timestamp + 7 days);
+        uint40 end = uint40(block.timestamp + 12 weeks);
         vm.prank(owner);
         org.createStream(username, 20000, address(token), end);
 
@@ -171,7 +171,7 @@ contract OrgTest is Test {
         skip(5 days);
 
         vm.prank(owner);
-        org.cancelSchedule(username, false); // payIncomplete = true
+        org.cancelSchedule(username);
     }
 
     function testEditStreamChangesAmount() public {
