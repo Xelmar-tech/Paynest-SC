@@ -157,7 +157,7 @@ contract Org is IPayments, Errors, Owner, ReentrancyGuard {
                 payoutAmount
             );
 
-        emit Payout(username, _schedule.token, payoutAmount);
+        emit SchedulePayout(username, _schedule.token, payoutAmount);
     }
 
     function _streamPayout(
@@ -189,7 +189,7 @@ contract Org is IPayments, Errors, Owner, ReentrancyGuard {
                 payoutAmount
             );
 
-        emit Payout(username, _stream.token, payoutAmount);
+        emit StreamPayout(username, _stream.token, payoutAmount);
     }
 
     function requestStreamPayout(

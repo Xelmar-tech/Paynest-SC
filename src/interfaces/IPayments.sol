@@ -21,12 +21,20 @@ interface IPayments {
     );
 
     /**
-     * @dev Emitted when a payout is successfully processed.
+     * @dev Emitted when a schedule payout is successfully processed.
      * @param username The username associated with the stream or schedule.
      * @param token The token address used for the payout.
      * @param amount The amount paid out.
      */
-    event Payout(string username, address token, uint256 amount);
+    event SchedulePayout(string username, address token, uint256 amount);
+
+    /**
+     * @dev Emitted when a stream payout is successfully processed.
+     * @param username The username associated with the stream or schedule.
+     * @param token The token address used for the payout.
+     * @param amount The amount paid out.
+     */
+    event StreamPayout(string username, address token, uint256 amount);
 
     /**
      * @dev Emitted when a payment stream is canceled.
