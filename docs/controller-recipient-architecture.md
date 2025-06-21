@@ -1,326 +1,444 @@
-# PayNest Controller/Recipient Architecture Specification
+# PayNest v2.0 Architecture: Controller/Recipient Separation & Multiple Payment Support
 
-## Overview
+## Executive Summary
 
-This document outlines the architectural enhancement to PayNest's username registry system to support **controller/recipient separation** and **single stream per token per user**. This addresses the fundamental limitation where smart account signers cannot set different recipient addresses for payments.
+This document outlines the complete architectural redesign of PayNest to support **controller/recipient separation** and **multiple payment flows per user**. The redesign addresses fundamental limitations in the current system that prevent smart account users from achieving the intended user experience of blockchain-abstracted payments.
 
-## Current Architecture Problems
+## Current Architecture Analysis & Problems
 
-### Problem 1: Sender == Recipient Assumption
-- Current system assumes the smart account signer is also the payment recipient
-- Breaks UX vision where users sign with one wallet but receive payments elsewhere
-- Prevents cross-chain recipient addresses
-- Forces recipient to be whoever currently owns the username
+### Problem 1: Broken Smart Account User Experience
 
-### Problem 2: Single Stream Per User Limitation
-- Users can only have one active stream regardless of token type
-- Prevents multi-token payroll (USDC salary + WETH equity)
-- GitHub Issue #2 identifies this as blocking feature
+**The Core Issue**: PayNest assumes the **smart account signer** is the same as the **payment recipient**, breaking the intended UX.
 
-### Problem 3: Vestigial Code
-- `previousAddress` field is stored but never used in business logic
-- Only tested to verify it exists, never used for functionality
-- Wastes ~20k gas per username update
+**Real-World Scenario**:
+- User signs transactions with smart account + paymaster (wallet A)
+- User wants payments to go to Binance wallet (wallet B)
+- Current system forces username to resolve to wallet A
+- Payments break because streams point to wallet A, not wallet B
 
-## Proposed Architecture
+**Impact**: Makes PayNest unusable for smart account users who want payment flexibility.
 
-### Enhanced Username Registry
+### Problem 2: Artificial Single Payment Limitations
+
+**The Constraints**:
+```solidity
+// Current storage - only ONE payment per type per user
+mapping(string => Stream) public streams;     // Alice can have 1 stream total
+mapping(string => Schedule) public schedules; // Alice can have 1 schedule total
+```
+
+**What Users Actually Need**:
+- USDC salary stream + WETH equity stream + bonus schedule
+- Weekly payments + monthly reviews + quarterly bonuses
+- Different tokens for different purposes
+
+**Impact**: Prevents complex compensation scenarios that real organizations require.
+
+### Problem 3: Fighting LlamaPay's Natural Design
+
+**LlamaPay Reality**: Pure flow-rate streaming protocol with no native end dates.
+```solidity
+// LlamaPay's actual interface
+function createStream(address to, uint216 amountPerSec) external;  // No endDate!
+```
+
+**PayNest's Artificial Layer**: Forces end dates through complex funding calculations.
+```solidity
+// PayNest's artificial approach
+uint256 totalFunding = amount;
+uint256 duration = endDate - startDate;  
+uint216 amountPerSec = totalFunding / duration;  // Artificial end date simulation
+```
+
+**Impact**: Adds complexity, gas costs, and mental model misalignment with underlying protocol.
+
+### Problem 4: Vestigial Code Waste
+
+**Analysis Results**: `previousAddress` field is stored but never used in business logic.
+- Costs ~20k gas per username update
+- Only used in tests to verify the field exists
+- Stream migration uses different data sources entirely
+
+**Impact**: Unnecessary gas costs and storage complexity.
+
+### Problem 5: Cross-Contract State Synchronization Impossibility
+
+**The Challenge**: One AddressRegistry serves multiple PaymentsPlugins across multiple DAOs.
+```
+AddressRegistry (global) → PaymentsPlugin A (DAO 1)
+                        → PaymentsPlugin B (DAO 2)  
+                        → PaymentsPlugin C (DAO 3)
+```
+
+**Auto-Migration Fantasy**: Registry notifies all plugins when recipient changes.
+**Reality**: Contracts can't listen to events; no way to implement this.
+
+**Impact**: Auto-migration is architecturally impossible without major compromises.
+
+### Problem 6: Inefficient LlamaPay Integration
+
+**Current Stream Editing**: Cancel-and-recreate pattern.
+```solidity
+// Current approach
+_cancelLlamaPayStream(oldAmount);    // Operation 1
+_createLlamaPayStream(newAmount);    // Operation 2
+```
+
+**LlamaPay's Native Capability**: Direct stream modification.
+```solidity
+// Available but unused
+function modifyStream(address oldTo, uint216 oldAmount, address to, uint216 newAmount) external;
+```
+
+**Impact**: ~100k extra gas per edit, loss of stream continuity.
+
+## Proposed Architecture: PayNest v2.0
+
+### 1. Controller/Recipient Separation
+
+**Core Concept**: Separate who controls username settings from who receives payments.
 
 ```solidity
 struct UsernameData {
-    address controller;     // Smart account that manages username
-    address recipient;      // Where payments actually go  
-    uint256 lastUpdateTime; // Remove unused previousAddress
+    address controller;     // Smart account that manages settings
+    address recipient;      // Where payments actually go
+    uint256 lastUpdateTime; // Audit trail (removing vestigial previousAddress)
 }
 
 mapping(string => UsernameData) public usernames;
-mapping(address => string) public controllerToUsername;
 ```
 
-**Key Changes:**
-- **Controller**: Smart account that can update username settings
-- **Recipient**: Address that receives payments (can be different from controller)
-- **Eliminated**: `previousAddress` field (vestigial code)
+**User Flow**:
+1. Smart account (controller) claims username
+2. Sets recipient to Binance wallet address  
+3. Payments flow to Binance, control stays with smart account
+4. Can update recipient anytime without losing payment history
 
-### Single Stream Per Token Per User Architecture
+### 2. Multiple Payment Architecture
 
+**Flow-Based Streams**: Embrace LlamaPay's natural design.
 ```solidity
-// Enhanced storage for per-token streams
-mapping(string => mapping(address => Stream)) public streams;
-mapping(string => mapping(address => address)) public streamRecipients;
+struct Stream {
+    address token;
+    uint216 amountPerSec;  // Pure flow rate (no artificial end dates)
+    bool active;
+    uint40 startTime;      // When flow started
+}
 
-// Stream management functions updated
-function createStream(string calldata username, address token, uint216 amount, uint40 endDate) external;
-function editStream(string calldata username, address token, uint256 amount) external;
-function getStream(string calldata username, address token) external view returns (Stream memory);
-function getAllUserStreams(string calldata username) external view returns (address[] memory, Stream[] memory);
+// Multiple streams per user using unique IDs
+mapping(string => mapping(bytes32 => Stream)) public streams;
+mapping(string => mapping(bytes32 => address)) public streamRecipients;
+mapping(string => bytes32[]) public userStreamIds;
 ```
 
-**Key Design Principles:**
-- **One stream per token per user**: Alice can have USDC stream AND WETH stream (but not multiple USDC streams)
-- **Clear token separation**: Each token type managed independently
-- **Efficient stream editing**: Uses LlamaPay's native `modifyStream()` function
-- **Maintains existing migration patterns**: Per stream migration logic preserved
+**Enhanced Schedules**: Multiple payment schedules per user.
+```solidity
+struct Schedule {
+    address token;
+    uint256 amount;
+    IntervalType interval;
+    bool isOneTime;
+    bool active;
+    uint40 firstPaymentDate;
+    uint40 nextPayout;
+}
 
-## Implementation Details
+mapping(string => mapping(bytes32 => Schedule)) public schedules;
+mapping(string => bytes32[]) public userScheduleIds;
+```
 
-### 1. Registry Interface Changes
+**Real-World Example**:
+```solidity
+// Alice's payments:
+// Stream 1: 1000 USDC/month salary (continuous)
+// Stream 2: 100 WETH/month equity (continuous)  
+// Schedule 1: 5000 USDC quarterly bonus
+// Schedule 2: 1000 DAI annual review payment
+```
 
-#### New Functions
+### 3. Enhanced Interface Design
 
+**Flow-Based Stream Management**:
+```solidity
+interface IPaymentsPlugin {
+    // Create indefinite flow rate (no end date needed)
+    function createStream(string calldata username, address token, uint216 amountPerSec) 
+        external returns (bytes32 streamId);
+    
+    // Update flow rate using LlamaPay's native modifyStream
+    function updateFlowRate(string calldata username, bytes32 streamId, uint216 newAmountPerSec) 
+        external;
+    
+    // Multiple schedule support
+    function createSchedule(string calldata username, address token, uint256 amount, 
+        IntervalType interval, bool isOneTime, uint40 firstPaymentDate) 
+        external returns (bytes32 scheduleId);
+    
+    // Precise payment management
+    function pauseStream(string calldata username, bytes32 streamId) external;
+    function resumeStream(string calldata username, bytes32 streamId) external;
+    function cancelSchedule(string calldata username, bytes32 scheduleId) external;
+    
+    // User payment overview
+    function getUserStreams(string calldata username) 
+        external view returns (bytes32[] memory streamIds, Stream[] memory streamData);
+    function getUserSchedules(string calldata username) 
+        external view returns (bytes32[] memory scheduleIds, Schedule[] memory scheduleData);
+}
+```
+
+**Registry Interface**:
 ```solidity
 interface IAddressRegistry {
-    // Updated core functions
+    // Controller/recipient separation
     function claimUsername(string calldata username, address recipient) external;
     function updateRecipient(string calldata username, address newRecipient) external;
+    
+    // Smart account support
+    function claimUsername(string calldata username, address recipient, address controller) external;
+    
+    // Access functions
     function getController(string calldata username) external view returns (address);
     function getRecipient(string calldata username) external view returns (address);
     
-    // Compatibility function
+    // Compatibility
     function getUserAddress(string calldata username) external view returns (address); // Returns recipient
-    
-    // Events
-    event UsernameClaimedV2(string indexed username, address indexed controller, address indexed recipient);
-    event RecipientUpdated(string indexed username, address indexed oldRecipient, address indexed newRecipient);
 }
 ```
 
-#### Authorization Model
+## Implementation Strategy
 
+### Phase 1: Core Registry Enhancement
+
+**Registry Updates**:
 ```solidity
-modifier onlyController(string calldata username) {
-    if (_msgSender() != usernames[username].controller) revert UnauthorizedController();
-    _;
+// Meta-transaction support for smart accounts
+import "@openzeppelin/contracts/utils/Context.sol";
+
+function claimUsername(string calldata username, address recipient) external {
+    address controller = _msgSender(); // Handles paymasters correctly
+    _claimUsername(username, controller, recipient);
 }
 
-function updateRecipient(string calldata username, address newRecipient) external onlyController(username) {
+function updateRecipient(string calldata username, address newRecipient) 
+    external onlyController(username) {
+    if (newRecipient == address(0)) revert InvalidRecipient();
+    
     address oldRecipient = usernames[username].recipient;
     usernames[username].recipient = newRecipient;
     usernames[username].lastUpdateTime = block.timestamp;
     
     emit RecipientUpdated(username, oldRecipient, newRecipient);
 }
+
+modifier onlyController(string calldata username) {
+    if (_msgSender() != usernames[username].controller) revert UnauthorizedController();
+    _;
+}
 ```
 
-### 2. PaymentsPlugin Integration
+### Phase 2: Multiple Payment Support
 
-#### Stream Management Updates
-
+**Stream Management**:
 ```solidity
-// Updated stream creation
-function createStream(string calldata username, address token, uint216 amount, uint40 endDate) 
-    external auth(MANAGER_PERMISSION_ID) {
-    
-    if (streams[username][token].active) revert StreamAlreadyExists();
+function createStream(string calldata username, address token, uint216 amountPerSec) 
+    external auth(MANAGER_PERMISSION_ID) returns (bytes32 streamId) {
     
     address recipient = registry.getRecipient(username);
     if (recipient == address(0)) revert UsernameNotFound();
+    if (amountPerSec == 0) revert InvalidFlowRate();
     
-    // Create LlamaPay stream to recipient
-    _createLlamaPayStream(token, recipient, amount, username);
+    // Generate unique stream ID
+    streamId = keccak256(abi.encodePacked(
+        username, token, amountPerSec, block.timestamp, userStreamIds[username].length
+    ));
+    
+    // Create LlamaPay stream with pure flow rate
+    _createLlamaPayStream(token, recipient, amountPerSec, streamId);
     
     // Store stream metadata
-    streams[username][token] = Stream({
+    streams[username][streamId] = Stream({
         token: token,
-        endDate: endDate,
+        amountPerSec: amountPerSec,
         active: true,
-        amount: amount,
-        lastPayout: uint40(block.timestamp)
+        startTime: uint40(block.timestamp)
     });
     
-    streamRecipients[username][token] = recipient;
+    streamRecipients[username][streamId] = recipient;
+    userStreamIds[username].push(streamId);
+    
+    emit StreamCreated(username, streamId, token, amountPerSec);
 }
 
-// Enhanced stream editing using LlamaPay's modifyStream
-function editStream(string calldata username, address token, uint256 amount) 
+function updateFlowRate(string calldata username, bytes32 streamId, uint216 newAmountPerSec) 
     external auth(MANAGER_PERMISSION_ID) {
     
-    if (amount == 0) revert InvalidAmount();
-    
-    Stream storage stream = streams[username][token];
+    Stream storage stream = streams[username][streamId];
     if (!stream.active) revert StreamNotActive();
     
-    // Use stored recipient address (not current username resolution)
-    address recipient = streamRecipients[username][token];
-    address llamaPayContract = tokenToLlamaPay[token];
+    address recipient = streamRecipients[username][streamId];
+    address llamaPayContract = tokenToLlamaPay[stream.token];
     
-    // Calculate new amount per second
-    uint256 remainingDuration = stream.endDate > block.timestamp ? 
-        stream.endDate - block.timestamp : 0;
-    uint216 newAmountPerSec = _calculateAmountPerSec(amount, remainingDuration, token);
-    
-    // Use LlamaPay's native modifyStream function
+    // Use LlamaPay's native modifyStream for efficiency
     Action[] memory actions = new Action[](1);
     actions[0].to = llamaPayContract;
-    actions[0].value = 0;
     actions[0].data = abi.encodeCall(
         ILlamaPay.modifyStream,
-        (recipient, stream.amount, recipient, newAmountPerSec)
+        (recipient, stream.amountPerSec, recipient, newAmountPerSec)
     );
     
-    // Execute via DAO
     DAO(payable(address(dao()))).execute(
-        keccak256(abi.encodePacked("edit-stream-", username, "-", Strings.toHexString(token))), 
+        keccak256(abi.encodePacked("update-flow-", streamId)), 
         actions, 
         0
     );
     
-    // Update stream metadata
-    stream.amount = newAmountPerSec;
-    
-    emit StreamUpdated(username, token, amount);
+    stream.amountPerSec = newAmountPerSec;
+    emit FlowRateUpdated(username, streamId, newAmountPerSec);
 }
 ```
 
-#### Manual Migration (Existing System Enhanced)
+### Phase 3: Migration System
 
+**Manual Migration for Multiple Payments**:
 ```solidity
-// Enhanced manual migration for multiple streams
-function migrateStream(string calldata username, address token) external {
-    address currentRecipient = registry.getRecipient(username);
+function migrateStream(string calldata username, bytes32 streamId) external {
     if (_msgSender() != registry.getController(username)) revert UnauthorizedMigration();
     
-    address oldStreamRecipient = streamRecipients[username][token];
-    if (oldStreamRecipient == currentRecipient) revert NoMigrationNeeded();
+    address newRecipient = registry.getRecipient(username);
+    address oldRecipient = streamRecipients[username][streamId];
     
-    _migrateStreamToNewAddress(username, token, oldStreamRecipient, currentRecipient);
+    if (oldRecipient == newRecipient) revert NoMigrationNeeded();
     
-    emit StreamMigrated(username, token, oldStreamRecipient, currentRecipient);
+    Stream storage stream = streams[username][streamId];
+    _migrateStreamToNewAddress(username, streamId, stream.token, oldRecipient, newRecipient);
+    
+    streamRecipients[username][streamId] = newRecipient;
+    emit StreamMigrated(username, streamId, oldRecipient, newRecipient);
 }
 
-// Bulk migration for all streams of a user
 function migrateAllStreams(string calldata username) external {
     if (_msgSender() != registry.getController(username)) revert UnauthorizedMigration();
     
-    address currentRecipient = registry.getRecipient(username);
-    // Iterate through all active streams and migrate each one
-    // Implementation details depend on how we track user's active streams
+    address newRecipient = registry.getRecipient(username);
+    bytes32[] memory streamIds = userStreamIds[username];
+    
+    for (uint256 i = 0; i < streamIds.length; i++) {
+        bytes32 streamId = streamIds[i];
+        if (streams[username][streamId].active) {
+            address oldRecipient = streamRecipients[username][streamId];
+            if (oldRecipient != newRecipient) {
+                Stream storage stream = streams[username][streamId];
+                _migrateStreamToNewAddress(username, streamId, stream.token, oldRecipient, newRecipient);
+                streamRecipients[username][streamId] = newRecipient;
+                emit StreamMigrated(username, streamId, oldRecipient, newRecipient);
+            }
+        }
+    }
 }
 ```
 
-### 3. Smart Account Integration
+## Benefits & Impact Analysis
 
-#### Meta-Transaction Support
+### User Experience Improvements
 
+**Before (v1.0)**:
+- Alice can have 1 stream total (any token)
+- Must use smart account address for payments
+- Cannot have complex compensation packages
+- Stream editing is expensive and disruptive
+
+**After (v2.0)**:
+- Alice can have unlimited streams and schedules
+- Payments go to any address (Binance, hardware wallet, etc.)
+- Complex compensation: salary + equity + bonuses
+- Efficient flow rate updates with stream continuity
+
+### Gas Impact Analysis
+
+**Optimizations**:
+- Remove `previousAddress`: -20k gas per username update
+- Use `modifyStream`: -100k gas per stream edit  
+- No artificial end date calculations: -50k gas per stream creation
+
+**New Costs**:
+- Additional stream ID tracking: +10k gas per stream
+- Multiple payment support: +15k gas per additional payment
+
+**Net Impact**: Significant gas savings for core operations, reasonable scaling costs.
+
+### Security Considerations
+
+**Controller Authorization**:
 ```solidity
-import "@openzeppelin/contracts/utils/Context.sol";
-
-function claimUsername(string calldata username, address recipient) external {
-    address controller = _msgSender(); // Handles meta-transactions properly
-    _claimUsername(username, controller, recipient);
-}
-
-function claimUsername(string calldata username, address recipient, address controller) external {
-    address actualController = controller == address(0) ? _msgSender() : controller;
-    // Add authorization validation if controller != _msgSender()
-    _claimUsername(username, actualController, recipient);
+// Only controller can update recipient or migrate streams
+modifier onlyController(string calldata username) {
+    if (_msgSender() != usernames[username].controller) revert UnauthorizedController();
+    _;
 }
 ```
 
-## Implementation Strategy
+**Migration Safety**:
+- Reuses proven migration logic from v1.0
+- Manual migration prevents unauthorized moves
+- Bulk migration for user convenience
 
-Since this is a virgin project with no production DAOs, we can implement the clean new architecture directly without backward compatibility concerns.
-
-## Security Considerations
-
-### 1. Authorization Model
-- **Controller Authority**: Only controller can update recipient address
-- **Migration Permissions**: Only controller can trigger manual migration
-- **Manual Migration Safety**: Reuses existing migration logic (proven secure)
-
-### 2. Recipient Validation
-
+**Recipient Validation**:
 ```solidity
-function updateRecipient(string calldata username, address newRecipient) external onlyController(username) {
+function updateRecipient(string calldata username, address newRecipient) external {
     if (newRecipient == address(0)) revert InvalidRecipient();
     // Additional validations as needed
-    
-    usernames[username].recipient = newRecipient;
 }
 ```
-
-### 3. Stream Migration Safety
-- Migration reuses existing `_migrateStreamToNewAddress()` function
-- Maintains all existing safety checks and fund protection
-- Manual migration requires controller authorization
-
-## Gas Impact Analysis
-
-### Registry Operations
-- **Username Claim**: +10k gas (additional recipient field)
-- **Recipient Update**: -20k gas (remove previousAddress SSTORE)
-- **Net Impact**: Roughly neutral
-
-### Stream Operations  
-- **Stream Creation**: +15k gas (additional token mapping)
-- **Multiple Streams**: Linear increase per additional stream
-- **Manual Migration**: Same gas as current system (~200k per stream)
-
-### Migration Operations
-- **Single Stream Migration**: Same as current (~200k gas)
-- **Multiple Stream Migration**: 200k × number of streams
 
 ## Testing Strategy
 
-### 1. Registry Tests
-- Controller/recipient separation
-- Authorization validation
-- Meta-transaction support
+### Core Functionality Tests
+- Controller/recipient separation validation
+- Multiple stream creation and management
+- Multiple schedule creation and execution
+- Flow rate updates and stream continuity
+- Migration workflows for complex payment scenarios
 
-### 2. Single Stream Per Token Tests
-- Per-token stream creation (one USDC stream, one WETH stream per user)
-- Stream isolation (token A doesn't affect token B)
-- Stream editing with LlamaPay's modifyStream function
-- Migration with multiple token streams per user
+### Integration Tests  
+- Smart account + paymaster workflows
+- Cross-chain recipient preparation
+- DAO treasury integration
+- LlamaPay protocol integration
 
-### 3. Integration Tests
-- End-to-end workflows with smart accounts
-- Cross-chain recipient scenarios (preparation)
-- Manual migration workflows
-- Gas optimization verification
+### Gas Optimization Tests
+- Compare v1.0 vs v2.0 gas costs
+- Multiple payment scaling analysis
+- Migration cost verification
 
-## Changes Summary
+## Migration from v1.0 to v2.0
 
-### New Architecture Features
-- ✅ **Registry Interface**: Controller/recipient separation for smart account compatibility
-- ✅ **Stream Storage**: Per-token streams using nested mapping structure  
-- ✅ **Function Signatures**: Stream functions now include token parameter for clarity
-- ✅ **Stream Editing**: Efficient `modifyStream()` using LlamaPay's native function
-- ✅ **Gas Optimization**: Removed vestigial `previousAddress` field
+**Virgin Project Benefits**: Since no production DAOs use PayNest yet, we can implement clean v2.0 architecture without backward compatibility complexity.
+
+**Deployment Strategy**:
+1. Deploy new v2.0 contracts
+2. Update frontend to handle multiple payments
+3. Test comprehensive payment scenarios
+4. Launch with full v2.0 feature set
 
 ## Version Impact Assessment
 
-This represents a **MAJOR version bump** (v1.0.0 → v2.0.0) because:
+**Major Version Bump**: v1.0.0 → v2.0.0
 
-1. **Breaking Interface Changes**: Stream functions now require token parameters
-2. **Storage Layout Changes**: New nested mapping structure
-3. **Behavioral Changes**: Username resolution now separates controller vs recipient
-4. **New Functionality**: Stream editing and per-token stream management
+**Breaking Changes**:
+- Stream functions require `streamId` parameters
+- Payment functions return unique identifiers
+- Flow-based interface replaces end-date model
+- Controller/recipient separation in registry
 
-### Implementation Path
-1. **Update Contract Interfaces**: Implement new controller/recipient registry
-2. **Update PaymentsPlugin**: Add per-token stream storage and modifyStream functionality
-3. **Update Frontend Integration**: Handle new per-token streams interface
-4. **Comprehensive Testing**: Test new architecture patterns
+**New Capabilities**:
+- Multiple streams and schedules per user
+- Flow-rate based streaming aligned with LlamaPay
+- Smart account + recipient separation
+- Efficient stream editing with native LlamaPay functions
 
-## Implementation Phases
+## Conclusion
 
-### Phase 1: Core Registry Enhancement
-- ✅ Controller/recipient separation
-- ✅ Remove previousAddress field
-- ✅ Meta-transaction support
-- ✅ Clean new interface design
+PayNest v2.0 represents a fundamental architectural evolution that solves the core limitation preventing smart account users from achieving blockchain-abstracted payment experiences. By embracing LlamaPay's natural flow-rate model and implementing true multiple payment support, PayNest becomes capable of handling real-world organizational payment complexity while maintaining security and efficiency.
 
-### Phase 2: Single Stream Per Token Support
-- ✅ Per-token stream storage (one stream per token per user)
-- ✅ Enhanced stream management functions with modifyStream
-- ✅ Clean implementation without legacy concerns
-- ✅ Comprehensive testing
-
-### Phase 3: Enhanced Features & Polish
-- ✅ Bulk migration functions
-- ✅ Gas optimization
-- ✅ Enhanced view functions
-- ✅ Documentation updates
-
-This architecture provides a robust foundation for PayNest's evolution while maintaining security and user experience standards.
+The architecture provides a robust foundation for PayNest's evolution into the definitive payment infrastructure for DAOs and organizations operating in the smart account ecosystem.
