@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document outlines the architectural enhancement to PayNest's username registry system to support **controller/recipient separation** and **multiple streams per user**. This addresses the fundamental limitation where smart account signers cannot set different recipient addresses for payments.
+This document outlines the architectural enhancement to PayNest's username registry system to support **controller/recipient separation** and **single stream per token per user**. This addresses the fundamental limitation where smart account signers cannot set different recipient addresses for payments.
 
 ## Current Architecture Problems
 
@@ -42,7 +42,7 @@ mapping(address => string) public controllerToUsername;
 - **Recipient**: Address that receives payments (can be different from controller)
 - **Eliminated**: `previousAddress` field (vestigial code)
 
-### Multiple Streams Architecture
+### Single Stream Per Token Per User Architecture
 
 ```solidity
 // Enhanced storage for per-token streams
@@ -51,20 +51,23 @@ mapping(string => mapping(address => address)) public streamRecipients;
 
 // Stream management functions updated
 function createStream(string calldata username, address token, uint216 amount, uint40 endDate) external;
+function editStream(string calldata username, address token, uint256 amount) external;
 function getStream(string calldata username, address token) external view returns (Stream memory);
 function getAllUserStreams(string calldata username) external view returns (address[] memory, Stream[] memory);
 ```
 
-**Benefits:**
-- Multiple streams per user (one per token type)
-- Clear separation by token address
-- Maintains existing migration patterns per stream
+**Key Design Principles:**
+- **One stream per token per user**: Alice can have USDC stream AND WETH stream (but not multiple USDC streams)
+- **Clear token separation**: Each token type managed independently
+- **Efficient stream editing**: Uses LlamaPay's native `modifyStream()` function
+- **Maintains existing migration patterns**: Per stream migration logic preserved
 
 ## Implementation Details
 
 ### 1. Registry Interface Changes
 
 #### New Functions
+
 ```solidity
 interface IAddressRegistry {
     // Updated core functions
@@ -73,7 +76,7 @@ interface IAddressRegistry {
     function getController(string calldata username) external view returns (address);
     function getRecipient(string calldata username) external view returns (address);
     
-    // Backward compatibility
+    // Compatibility function
     function getUserAddress(string calldata username) external view returns (address); // Returns recipient
     
     // Events
@@ -83,6 +86,7 @@ interface IAddressRegistry {
 ```
 
 #### Authorization Model
+
 ```solidity
 modifier onlyController(string calldata username) {
     if (_msgSender() != usernames[username].controller) revert UnauthorizedController();
@@ -101,6 +105,7 @@ function updateRecipient(string calldata username, address newRecipient) externa
 ### 2. PaymentsPlugin Integration
 
 #### Stream Management Updates
+
 ```solidity
 // Updated stream creation
 function createStream(string calldata username, address token, uint216 amount, uint40 endDate) 
@@ -125,9 +130,50 @@ function createStream(string calldata username, address token, uint216 amount, u
     
     streamRecipients[username][token] = recipient;
 }
+
+// Enhanced stream editing using LlamaPay's modifyStream
+function editStream(string calldata username, address token, uint256 amount) 
+    external auth(MANAGER_PERMISSION_ID) {
+    
+    if (amount == 0) revert InvalidAmount();
+    
+    Stream storage stream = streams[username][token];
+    if (!stream.active) revert StreamNotActive();
+    
+    // Use stored recipient address (not current username resolution)
+    address recipient = streamRecipients[username][token];
+    address llamaPayContract = tokenToLlamaPay[token];
+    
+    // Calculate new amount per second
+    uint256 remainingDuration = stream.endDate > block.timestamp ? 
+        stream.endDate - block.timestamp : 0;
+    uint216 newAmountPerSec = _calculateAmountPerSec(amount, remainingDuration, token);
+    
+    // Use LlamaPay's native modifyStream function
+    Action[] memory actions = new Action[](1);
+    actions[0].to = llamaPayContract;
+    actions[0].value = 0;
+    actions[0].data = abi.encodeCall(
+        ILlamaPay.modifyStream,
+        (recipient, stream.amount, recipient, newAmountPerSec)
+    );
+    
+    // Execute via DAO
+    DAO(payable(address(dao()))).execute(
+        keccak256(abi.encodePacked("edit-stream-", username, "-", Strings.toHexString(token))), 
+        actions, 
+        0
+    );
+    
+    // Update stream metadata
+    stream.amount = newAmountPerSec;
+    
+    emit StreamUpdated(username, token, amount);
+}
 ```
 
 #### Manual Migration (Existing System Enhanced)
+
 ```solidity
 // Enhanced manual migration for multiple streams
 function migrateStream(string calldata username, address token) external {
@@ -155,6 +201,7 @@ function migrateAllStreams(string calldata username) external {
 ### 3. Smart Account Integration
 
 #### Meta-Transaction Support
+
 ```solidity
 import "@openzeppelin/contracts/utils/Context.sol";
 
@@ -170,55 +217,9 @@ function claimUsername(string calldata username, address recipient, address cont
 }
 ```
 
-## Migration Strategy
+## Implementation Strategy
 
-### 1. Backward Compatibility
-
-#### Existing Function Support
-```solidity
-// Keep existing interface working
-function getUserAddress(string calldata username) external view returns (address) {
-    return usernames[username].recipient; // Return recipient for payments
-}
-
-// Deprecated but functional
-function updateUserAddress(string calldata username, address newAddress) external {
-    // Map to new function
-    updateRecipient(username, newAddress);
-}
-```
-
-#### Data Migration
-```solidity
-struct LegacyAddressHistory {
-    address currentAddress;
-    address previousAddress; // Will be discarded
-    uint256 lastChangeTime;
-}
-
-function migrateFromLegacy(string[] calldata usernames) external onlyOwner {
-    for (uint i = 0; i < usernames.length; i++) {
-        LegacyAddressHistory memory legacy = legacyUserAddresses[usernames[i]];
-        
-        usernames[usernames[i]] = UsernameData({
-            controller: legacy.currentAddress,
-            recipient: legacy.currentAddress,    // Default: controller == recipient
-            lastUpdateTime: legacy.lastChangeTime
-        });
-    }
-}
-```
-
-### 2. Stream Data Migration
-
-#### Single Stream to Multi-Stream
-```solidity
-function migrateStreamsToMultiToken() external onlyOwner {
-    // For each existing stream, move from:
-    // streams[username] -> streams[username][stream.token]
-    // This is a one-time upgrade operation
-}
-```
+Since this is a virgin project with no production DAOs, we can implement the clean new architecture directly without backward compatibility concerns.
 
 ## Security Considerations
 
@@ -228,6 +229,7 @@ function migrateStreamsToMultiToken() external onlyOwner {
 - **Manual Migration Safety**: Reuses existing migration logic (proven secure)
 
 ### 2. Recipient Validation
+
 ```solidity
 function updateRecipient(string calldata username, address newRecipient) external onlyController(username) {
     if (newRecipient == address(0)) revert InvalidRecipient();
@@ -263,14 +265,13 @@ function updateRecipient(string calldata username, address newRecipient) externa
 ### 1. Registry Tests
 - Controller/recipient separation
 - Authorization validation
-- Backward compatibility
 - Meta-transaction support
 
-### 2. Multiple Stream Tests
-- Per-token stream creation
+### 2. Single Stream Per Token Tests
+- Per-token stream creation (one USDC stream, one WETH stream per user)
 - Stream isolation (token A doesn't affect token B)
-- Bulk stream operations
-- Migration with multiple streams
+- Stream editing with LlamaPay's modifyStream function
+- Migration with multiple token streams per user
 
 ### 3. Integration Tests
 - End-to-end workflows with smart accounts
@@ -278,32 +279,29 @@ function updateRecipient(string calldata username, address newRecipient) externa
 - Manual migration workflows
 - Gas optimization verification
 
-## Breaking Changes Summary
+## Changes Summary
 
-### Major Breaking Changes
-- ✅ **Registry Interface**: New controller/recipient separation
-- ✅ **Stream Storage**: Single mapping → nested mapping
-- ✅ **Function Signatures**: Stream functions now require token parameter
-
-### Backward Compatibility Maintained
-- ✅ **getUserAddress()**: Returns recipient address
-- ✅ **Existing Streams**: Migration script handles data conversion
-- ✅ **Plugin Interface**: Core payment flows remain similar
+### New Architecture Features
+- ✅ **Registry Interface**: Controller/recipient separation for smart account compatibility
+- ✅ **Stream Storage**: Per-token streams using nested mapping structure  
+- ✅ **Function Signatures**: Stream functions now include token parameter for clarity
+- ✅ **Stream Editing**: Efficient `modifyStream()` using LlamaPay's native function
+- ✅ **Gas Optimization**: Removed vestigial `previousAddress` field
 
 ## Version Impact Assessment
 
 This represents a **MAJOR version bump** (v1.0.0 → v2.0.0) because:
 
 1. **Breaking Interface Changes**: Stream functions now require token parameters
-2. **Storage Layout Changes**: Requires proxy upgrade for existing deployments  
-3. **Behavioral Changes**: Username resolution now returns recipient vs controller
-4. **Migration Required**: Existing deployments need data migration
+2. **Storage Layout Changes**: New nested mapping structure
+3. **Behavioral Changes**: Username resolution now separates controller vs recipient
+4. **New Functionality**: Stream editing and per-token stream management
 
-### Upgrade Path
-1. **Deploy New Implementation**: v2.0.0 contracts
-2. **Run Migration Scripts**: Convert existing data to new format
-3. **Update Frontend Integration**: Handle new multiple streams interface
-4. **Deprecation Notice**: Announce timeline for v1.x support end
+### Implementation Path
+1. **Update Contract Interfaces**: Implement new controller/recipient registry
+2. **Update PaymentsPlugin**: Add per-token stream storage and modifyStream functionality
+3. **Update Frontend Integration**: Handle new per-token streams interface
+4. **Comprehensive Testing**: Test new architecture patterns
 
 ## Implementation Phases
 
@@ -311,12 +309,12 @@ This represents a **MAJOR version bump** (v1.0.0 → v2.0.0) because:
 - ✅ Controller/recipient separation
 - ✅ Remove previousAddress field
 - ✅ Meta-transaction support
-- ✅ Backward compatibility layer
+- ✅ Clean new interface design
 
-### Phase 2: Multiple Streams Support
-- ✅ Per-token stream storage
-- ✅ Enhanced stream management functions
-- ✅ Migration script for existing streams
+### Phase 2: Single Stream Per Token Support
+- ✅ Per-token stream storage (one stream per token per user)
+- ✅ Enhanced stream management functions with modifyStream
+- ✅ Clean implementation without legacy concerns
 - ✅ Comprehensive testing
 
 ### Phase 3: Enhanced Features & Polish
