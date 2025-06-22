@@ -22,15 +22,12 @@ contract PaymentsPluginV2Test is Test {
     function setUp() public {
         registry = new AddressRegistry();
         pluginImplementation = new PaymentsPlugin();
-        
+
         // Create proxy and initialize
         bytes memory initData = abi.encodeWithSelector(
-            PaymentsPlugin.initialize.selector,
-            DAO(payable(DAO_ADDRESS)),
-            address(registry),
-            LLAMAPAY_FACTORY
+            PaymentsPlugin.initialize.selector, DAO(payable(DAO_ADDRESS)), address(registry), LLAMAPAY_FACTORY
         );
-        
+
         ERC1967Proxy proxy = new ERC1967Proxy(address(pluginImplementation), initData);
         plugin = PaymentsPlugin(address(proxy));
     }
@@ -62,28 +59,22 @@ contract PaymentsPluginV2Test is Test {
 
     function test_initialize_ZeroRegistry_ShouldRevert() public {
         PaymentsPlugin newImplementation = new PaymentsPlugin();
-        
+
         bytes memory initData = abi.encodeWithSelector(
-            PaymentsPlugin.initialize.selector,
-            DAO(payable(DAO_ADDRESS)),
-            address(0),
-            LLAMAPAY_FACTORY
+            PaymentsPlugin.initialize.selector, DAO(payable(DAO_ADDRESS)), address(0), LLAMAPAY_FACTORY
         );
-        
+
         vm.expectRevert();
         new ERC1967Proxy(address(newImplementation), initData);
     }
 
     function test_initialize_ZeroLlamaPayFactory_ShouldRevert() public {
         PaymentsPlugin newImplementation = new PaymentsPlugin();
-        
+
         bytes memory initData = abi.encodeWithSelector(
-            PaymentsPlugin.initialize.selector,
-            DAO(payable(DAO_ADDRESS)),
-            address(registry),
-            address(0)
+            PaymentsPlugin.initialize.selector, DAO(payable(DAO_ADDRESS)), address(registry), address(0)
         );
-        
+
         vm.expectRevert();
         new ERC1967Proxy(address(newImplementation), initData);
     }
@@ -109,14 +100,14 @@ contract PaymentsPluginV2Test is Test {
 
     function test_getStream_NonExistentStream_ShouldRevert() public {
         bytes32 streamId = keccak256("nonexistent");
-        
+
         vm.expectRevert(PaymentsPlugin.StreamIdNotFound.selector);
         plugin.getStream("alice", streamId);
     }
 
     function test_getSchedule_NonExistentSchedule_ShouldRevert() public {
         bytes32 scheduleId = keccak256("nonexistent");
-        
+
         vm.expectRevert(PaymentsPlugin.ScheduleIdNotFound.selector);
         plugin.getSchedule("alice", scheduleId);
     }
@@ -240,7 +231,7 @@ contract PaymentsPluginV2Test is Test {
     function test_storageLayout_ShouldNotHaveStorageConflicts() public view {
         // This test ensures that the storage layout is properly set up
         // by checking that initialization worked properly
-        
+
         // Verify state is properly set in our proxy
         assertEq(address(plugin.registry()), address(registry));
         assertEq(address(plugin.llamaPayFactory()), LLAMAPAY_FACTORY);

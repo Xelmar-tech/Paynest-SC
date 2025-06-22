@@ -88,35 +88,35 @@ contract AddressRegistryExpandedTest is Test {
     function test_claimUsername_ValidUsername_MinimumLength_ShouldWork() public {
         vm.prank(ALICE);
         registry.claimUsername("abc", ALICE); // 3 characters (minimum)
-        
+
         assertEq(registry.getRecipient("abc"), ALICE);
     }
 
     function test_claimUsername_ValidUsername_MaximumLength_ShouldWork() public {
         vm.prank(ALICE);
         registry.claimUsername("abcdefghijklmnopqrst", ALICE); // 20 characters (maximum)
-        
+
         assertEq(registry.getRecipient("abcdefghijklmnopqrst"), ALICE);
     }
 
     function test_claimUsername_ValidUsername_WithNumbers_ShouldWork() public {
         vm.prank(ALICE);
         registry.claimUsername("alice123", ALICE);
-        
+
         assertEq(registry.getRecipient("alice123"), ALICE);
     }
 
     function test_claimUsername_ValidUsername_WithUnderscore_ShouldWork() public {
         vm.prank(ALICE);
         registry.claimUsername("alice_bob", ALICE);
-        
+
         assertEq(registry.getRecipient("alice_bob"), ALICE);
     }
 
     function test_claimUsername_ValidUsername_MixedValid_ShouldWork() public {
         vm.prank(ALICE);
         registry.claimUsername("user_123", ALICE);
-        
+
         assertEq(registry.getRecipient("user_123"), ALICE);
     }
 
@@ -553,10 +553,10 @@ contract AddressRegistryExpandedTest is Test {
         // Test all valid characters: lowercase letters, numbers, underscore (not at start/end)
         vm.prank(ALICE);
         registry.claimUsername("abcdefghijklmnopqrst", ALICE); // 20 characters with letters
-        
+
         vm.prank(BOB);
         registry.claimUsername("test_123", BOB);
-        
+
         assertEq(registry.getRecipient("test_123"), BOB);
         assertEq(registry.getRecipient("abcdefghijklmnopqrst"), ALICE);
     }
@@ -565,19 +565,19 @@ contract AddressRegistryExpandedTest is Test {
         // Test exactly 3 characters
         vm.prank(ALICE);
         registry.claimUsername("abc", ALICE);
-        
+
         // Test exactly 20 characters
         vm.prank(BOB);
         registry.claimUsername("abcdefghijklmnopqrst", BOB);
-        
+
         assertEq(registry.getRecipient("abc"), ALICE);
         assertEq(registry.getRecipient("abcdefghijklmnopqrst"), BOB);
     }
 
     function test_claimUsername_CommonUsernamePatterns_ShouldWork() public {
         string[5] memory commonPatterns = ["user123", "alice_bob", "test_user", "dev_account", "main_wallet"];
-        
-        for (uint i = 0; i < commonPatterns.length; i++) {
+
+        for (uint256 i = 0; i < commonPatterns.length; i++) {
             address user = address(uint160(0x100 + i));
             vm.prank(user);
             registry.claimUsername(commonPatterns[i], user);

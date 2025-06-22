@@ -53,25 +53,27 @@ contract AddressRegistryInvariantsV2 is Test {
         for (uint256 i = 0; i < actors.length; i++) {
             for (uint256 j = 0; j < actors.length; j++) {
                 string memory username = string(abi.encodePacked("user", vm.toString(i), "_", vm.toString(j)));
-                
+
                 if (!registry.isUsernameAvailable(username)) {
                     IRegistry.UsernameData memory data = registry.getUsernameData(username);
-                    
+
                     // Controller must not be zero
                     assertTrue(data.controller != address(0), "AR2.1: Controller cannot be zero for claimed username");
-                    
+
                     // Recipient must not be zero
                     assertTrue(data.recipient != address(0), "AR2.1: Recipient cannot be zero for claimed username");
-                    
+
                     // Timestamp must be valid
                     assertGt(data.lastUpdateTime, 0, "AR2.1: Must have valid timestamp");
                     assertLe(data.lastUpdateTime, block.timestamp, "AR2.1: Timestamp cannot be future");
-                    
+
                     // View functions must be consistent
                     assertEq(registry.getController(username), data.controller, "AR2.1: Controller view inconsistent");
                     assertEq(registry.getRecipient(username), data.recipient, "AR2.1: Recipient view inconsistent");
                     assertEq(registry.getUserAddress(username), data.recipient, "AR2.1: V1 compatibility broken");
-                    assertEq(registry.getLastUpdate(username), data.lastUpdateTime, "AR2.1: Timestamp view inconsistent");
+                    assertEq(
+                        registry.getLastUpdate(username), data.lastUpdateTime, "AR2.1: Timestamp view inconsistent"
+                    );
                 }
             }
         }
@@ -83,19 +85,19 @@ contract AddressRegistryInvariantsV2 is Test {
         for (uint256 i = 0; i < actors.length; i++) {
             for (uint256 j = 0; j < actors.length; j++) {
                 string memory username = string(abi.encodePacked("user", vm.toString(i), "_", vm.toString(j)));
-                
+
                 if (!registry.isUsernameAvailable(username)) {
                     IRegistry.UsernameData memory data = registry.getUsernameData(username);
-                    
+
                     // Controller authority: only controller should be able to modify
                     // This is tested implicitly by the fact that the system allows modifications
                     // and our ghost tracking should be consistent
                     assertTrue(data.controller != address(0), "AR2.2: Valid username must have controller");
-                    
+
                     // Each username should have exactly one controller
                     address controller = registry.getController(username);
                     assertEq(controller, data.controller, "AR2.2: Controller consistency");
-                    
+
                     // Username should map to exactly one recipient
                     address recipient = registry.getRecipient(username);
                     assertEq(recipient, data.recipient, "AR2.2: Recipient consistency");
@@ -110,39 +112,39 @@ contract AddressRegistryInvariantsV2 is Test {
         for (uint256 i = 0; i < actors.length; i++) {
             for (uint256 j = 0; j < actors.length; j++) {
                 string memory username = string(abi.encodePacked("user", vm.toString(i), "_", vm.toString(j)));
-                
+
                 if (!registry.isUsernameAvailable(username)) {
                     bytes memory usernameBytes = bytes(username);
-                    
+
                     // V2 Length requirements: 3-20 characters
                     assertGe(usernameBytes.length, 3, "AR2.3: Username too short (min 3)");
                     assertLe(usernameBytes.length, 20, "AR2.3: Username too long (max 20)");
-                    
+
                     // First character must be lowercase letter
                     bytes1 firstChar = usernameBytes[0];
                     assertTrue(
                         firstChar >= 0x61 && firstChar <= 0x7A, // a-z only
                         "AR2.3: Username must start with lowercase letter"
                     );
-                    
+
                     // Last character cannot be underscore
                     bytes1 lastChar = usernameBytes[usernameBytes.length - 1];
                     assertTrue(lastChar != 0x5F, "AR2.3: Username cannot end with underscore");
-                    
+
                     // No consecutive underscores
                     for (uint256 k = 0; k < usernameBytes.length - 1; k++) {
                         if (usernameBytes[k] == 0x5F) {
                             assertTrue(usernameBytes[k + 1] != 0x5F, "AR2.3: No consecutive underscores allowed");
                         }
                     }
-                    
+
                     // All characters must be valid (lowercase letters, numbers, underscore)
                     for (uint256 k = 0; k < usernameBytes.length; k++) {
                         bytes1 char = usernameBytes[k];
                         bool isValid = (char >= 0x61 && char <= 0x7A) // a-z
                             || (char >= 0x30 && char <= 0x39) // 0-9
                             || (char == 0x5F); // underscore
-                        
+
                         assertTrue(isValid, "AR2.3: Invalid character in V2 username");
                     }
                 }
@@ -156,19 +158,19 @@ contract AddressRegistryInvariantsV2 is Test {
         for (uint256 i = 0; i < actors.length; i++) {
             for (uint256 j = 0; j < actors.length; j++) {
                 string memory username = string(abi.encodePacked("user", vm.toString(i), "_", vm.toString(j)));
-                
+
                 if (!registry.isUsernameAvailable(username)) {
                     IRegistry.UsernameData memory data = registry.getUsernameData(username);
-                    
+
                     // Controllers and recipients can be same or different - both valid
                     // No restriction on this relationship
                     assertTrue(data.controller != address(0), "AR2.4: Controller must be valid");
                     assertTrue(data.recipient != address(0), "AR2.4: Recipient must be valid");
-                    
+
                     // A single controller can control multiple usernames (this is allowed)
                     // A single recipient can receive for multiple usernames (this is allowed)
                     // These are features, not bugs, so we verify independence is maintained
-                    
+
                     // Controller and recipient can be the same address (simple case)
                     // or different addresses (smart account UX) - both are valid V2 patterns
                 }
@@ -181,11 +183,11 @@ contract AddressRegistryInvariantsV2 is Test {
     function invariant_AR2_5_metaTransactionNonceConsistency() public view {
         for (uint256 i = 0; i < actors.length; i++) {
             uint256 nonce = registry.nonces(actors[i]);
-            
+
             // Nonces are non-negative (uint256 ensures this)
             // Nonces can be zero for unused addresses
             assertTrue(nonce >= 0, "AR2.5: Nonce must be non-negative");
-            
+
             // Note: We can't easily test nonce incrementation in view function
             // This would need to be tested with actual meta-transaction calls
         }
@@ -197,10 +199,10 @@ contract AddressRegistryInvariantsV2 is Test {
         for (uint256 i = 0; i < actors.length; i++) {
             for (uint256 j = 0; j < actors.length; j++) {
                 string memory username = string(abi.encodePacked("user", vm.toString(i), "_", vm.toString(j)));
-                
+
                 bool isAvailable = registry.isUsernameAvailable(username);
                 IRegistry.UsernameData memory data = registry.getUsernameData(username);
-                
+
                 if (isAvailable) {
                     // If available, all data should be zero
                     assertEq(data.controller, address(0), "AR2.6: Available username should have zero controller");
@@ -220,10 +222,10 @@ contract AddressRegistryInvariantsV2 is Test {
         for (uint256 i = 0; i < actors.length; i++) {
             for (uint256 j = 0; j < actors.length; j++) {
                 string memory username = string(abi.encodePacked("user", vm.toString(i), "_", vm.toString(j)));
-                
+
                 if (!registry.isUsernameAvailable(username)) {
                     IRegistry.UsernameData memory data = registry.getUsernameData(username);
-                    
+
                     assertTrue(data.controller != address(0), "AR2.7: Controller cannot be zero address");
                     assertTrue(data.recipient != address(0), "AR2.7: Recipient cannot be zero address");
                 }
@@ -237,14 +239,14 @@ contract AddressRegistryInvariantsV2 is Test {
         for (uint256 i = 0; i < actors.length; i++) {
             for (uint256 j = 0; j < actors.length; j++) {
                 string memory username = string(abi.encodePacked("user", vm.toString(i), "_", vm.toString(j)));
-                
+
                 if (!registry.isUsernameAvailable(username)) {
                     IRegistry.UsernameData memory data = registry.getUsernameData(username);
-                    
+
                     // Timestamp should be reasonable
                     assertGt(data.lastUpdateTime, 0, "AR2.8: Timestamp should be positive");
                     assertLe(data.lastUpdateTime, block.timestamp, "AR2.8: Timestamp cannot be in future");
-                    
+
                     // Should be after a reasonable point (contract deployment time)
                     assertGe(data.lastUpdateTime, 1000000000, "AR2.8: Timestamp should be reasonable");
                 }
@@ -259,7 +261,7 @@ contract AddressRegistryInvariantsV2 is Test {
     /// @notice Handler for claiming usernames with same controller/recipient
     function claimUsernameSimple(uint256 actorSeed, uint256 usernameSeed) public useActor(actorSeed) {
         string memory username = string(abi.encodePacked("test", vm.toString(bound(usernameSeed, 0, 999))));
-        
+
         try registry.claimUsername(username, currentActor) {
             // Update ghost variables
             if (registry.getController(username) == currentActor) {
@@ -274,13 +276,13 @@ contract AddressRegistryInvariantsV2 is Test {
     }
 
     /// @notice Handler for claiming usernames with separate controller/recipient
-    function claimUsernameSeparated(uint256 actorSeed, uint256 recipientSeed, uint256 usernameSeed) 
-        public 
-        useActor(actorSeed) 
+    function claimUsernameSeparated(uint256 actorSeed, uint256 recipientSeed, uint256 usernameSeed)
+        public
+        useActor(actorSeed)
     {
         address recipient = actors[bound(recipientSeed, 0, actors.length - 1)];
         string memory username = string(abi.encodePacked("split", vm.toString(bound(usernameSeed, 0, 999))));
-        
+
         try registry.claimUsername(username, recipient, currentActor) {
             // Update ghost variables
             if (registry.getController(username) == currentActor) {
@@ -295,13 +297,13 @@ contract AddressRegistryInvariantsV2 is Test {
     }
 
     /// @notice Handler for updating recipient
-    function updateRecipient(uint256 actorSeed, uint256 newRecipientSeed, uint256 usernameSeed) 
-        public 
-        useActor(actorSeed) 
+    function updateRecipient(uint256 actorSeed, uint256 newRecipientSeed, uint256 usernameSeed)
+        public
+        useActor(actorSeed)
     {
         address newRecipient = actors[bound(newRecipientSeed, 0, actors.length - 1)];
         string memory username = string(abi.encodePacked("test", vm.toString(bound(usernameSeed, 0, 999))));
-        
+
         try registry.updateRecipient(username, newRecipient) {
             // Update ghost variables if successful
             if (registry.getController(username) == currentActor) {
@@ -313,13 +315,13 @@ contract AddressRegistryInvariantsV2 is Test {
     }
 
     /// @notice Handler for transferring control
-    function transferControl(uint256 actorSeed, uint256 newControllerSeed, uint256 usernameSeed) 
-        public 
-        useActor(actorSeed) 
+    function transferControl(uint256 actorSeed, uint256 newControllerSeed, uint256 usernameSeed)
+        public
+        useActor(actorSeed)
     {
         address newController = actors[bound(newControllerSeed, 0, actors.length - 1)];
         string memory username = string(abi.encodePacked("test", vm.toString(bound(usernameSeed, 0, 999))));
-        
+
         try registry.transferControl(username, newController) {
             // Update ghost variables if successful
             if (ghost_usernameToController[username] == currentActor) {

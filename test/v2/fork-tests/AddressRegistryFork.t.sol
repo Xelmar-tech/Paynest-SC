@@ -34,7 +34,8 @@ contract AddressRegistryForkTest is ForkTestBaseV2 {
         super.setUp();
 
         // Build the fork test environment using DAOFactory pattern
-        (dao, repo, setup, plugin, registry, llamaPayFactory, usdc) = new PaymentsForkBuilderV2().withManager(bob).build();
+        (dao, repo, setup, plugin, registry, llamaPayFactory, usdc) =
+            new PaymentsForkBuilderV2().withManager(bob).build();
     }
 
     modifier givenTestingRegistryDeployment() {
@@ -44,7 +45,7 @@ contract AddressRegistryForkTest is ForkTestBaseV2 {
     function test_GivenTestingRegistryDeployment() external givenTestingRegistryDeployment {
         // It should deploy registry successfully
         assertTrue(address(registry) != address(0));
-        
+
         // It should integrate with plugin correctly
         assertEq(address(plugin.registry()), address(registry));
     }
@@ -53,10 +54,10 @@ contract AddressRegistryForkTest is ForkTestBaseV2 {
         // It should work with real deployment
         vm.expectEmit(true, true, true, true);
         emit UsernameRegistered(TEST_USERNAME, alice, alice);
-        
+
         vm.prank(alice);
         registry.claimUsername(TEST_USERNAME, alice);
-        
+
         // Verify registration worked
         IRegistry.UsernameData memory data = registry.getUsernameData(TEST_USERNAME);
         assertEq(data.controller, alice);
@@ -69,15 +70,15 @@ contract AddressRegistryForkTest is ForkTestBaseV2 {
         // It should allow controller/recipient separation
         vm.expectEmit(true, true, true, true);
         emit UsernameRegistered(TEST_USERNAME, alice, bob);
-        
+
         vm.prank(alice);
         registry.claimUsername(TEST_USERNAME, bob, alice);
-        
+
         // Verify separation worked
         IRegistry.UsernameData memory data = registry.getUsernameData(TEST_USERNAME);
         assertEq(data.controller, alice);
         assertEq(data.recipient, bob);
-        
+
         // Verify view functions work correctly
         assertEq(registry.getController(TEST_USERNAME), alice);
         assertEq(registry.getRecipient(TEST_USERNAME), bob);
@@ -88,14 +89,14 @@ contract AddressRegistryForkTest is ForkTestBaseV2 {
         // Setup: Alice claims username with herself as recipient
         vm.prank(alice);
         registry.claimUsername(TEST_USERNAME, alice);
-        
+
         // It should update recipient successfully
         vm.expectEmit(true, true, true, true);
         emit RecipientUpdated(TEST_USERNAME, alice, carol);
-        
+
         vm.prank(alice);
         registry.updateRecipient(TEST_USERNAME, carol);
-        
+
         // Verify update worked
         IRegistry.UsernameData memory data = registry.getUsernameData(TEST_USERNAME);
         assertEq(data.controller, alice);
@@ -106,53 +107,53 @@ contract AddressRegistryForkTest is ForkTestBaseV2 {
         // Setup: Alice claims username
         vm.prank(alice);
         registry.claimUsername(TEST_USERNAME, alice);
-        
+
         // It should transfer control successfully
         vm.expectEmit(true, true, true, true);
         emit ControlTransferred(TEST_USERNAME, alice, bob);
-        
+
         vm.prank(alice);
         registry.transferControl(TEST_USERNAME, bob);
-        
+
         // Verify transfer worked
         IRegistry.UsernameData memory data = registry.getUsernameData(TEST_USERNAME);
         assertEq(data.controller, bob);
         assertEq(data.recipient, alice); // Recipient unchanged
-        
+
         // Bob should now be able to update recipient
         vm.prank(bob);
         registry.updateRecipient(TEST_USERNAME, carol);
-        
+
         data = registry.getUsernameData(TEST_USERNAME);
         assertEq(data.recipient, carol);
     }
 
     function test_WhenValidatingUsernamesOnFork() external givenTestingRegistryDeployment {
         // It should enforce V2 validation rules
-        
+
         // Valid usernames should work
         vm.prank(alice);
         registry.claimUsername("abc", alice); // Minimum length
-        
+
         vm.prank(bob);
         registry.claimUsername("abcdefghijklmnopqrst", bob); // Maximum length
-        
+
         vm.prank(carol);
         registry.claimUsername("user_123", carol); // Mixed valid chars
-        
+
         // Invalid usernames should fail
         vm.expectRevert(AddressRegistry.InvalidUsername.selector);
         vm.prank(david);
         registry.claimUsername("ab", david); // Too short
-        
+
         vm.expectRevert(AddressRegistry.InvalidUsername.selector);
         vm.prank(david);
         registry.claimUsername("abcdefghijklmnopqrstuvwxyz", david); // Too long
-        
+
         vm.expectRevert(AddressRegistry.InvalidUsername.selector);
         vm.prank(david);
         registry.claimUsername("1alice", david); // Starts with number
-        
+
         vm.expectRevert(AddressRegistry.InvalidUsername.selector);
         vm.prank(david);
         registry.claimUsername("alice__bob", david); // Consecutive underscores
@@ -160,26 +161,26 @@ contract AddressRegistryForkTest is ForkTestBaseV2 {
 
     function test_WhenMultipleUsersClaimUsernames() external givenTestingRegistryDeployment {
         // It should handle multiple users correctly
-        
+
         // Multiple users claim different usernames
         vm.prank(alice);
         registry.claimUsername("alice", alice);
-        
+
         vm.prank(bob);
         registry.claimUsername("bob_test", bob);
-        
+
         vm.prank(carol);
         registry.claimUsername("carol123", carol);
-        
+
         // Verify all registrations
         assertEq(registry.getController("alice"), alice);
         assertEq(registry.getController("bob_test"), bob);
         assertEq(registry.getController("carol123"), carol);
-        
+
         assertEq(registry.getRecipient("alice"), alice);
         assertEq(registry.getRecipient("bob_test"), bob);
         assertEq(registry.getRecipient("carol123"), carol);
-        
+
         // Verify availability checks
         assertFalse(registry.isUsernameAvailable("alice"));
         assertFalse(registry.isUsernameAvailable("bob_test"));
@@ -189,23 +190,23 @@ contract AddressRegistryForkTest is ForkTestBaseV2 {
 
     function test_WhenHandlingComplexWorkflows() external givenTestingRegistryDeployment {
         // It should handle complex real-world scenarios
-        
+
         // 1. Alice claims username with separated controller/recipient
         vm.prank(alice);
         registry.claimUsername("alice", bob, alice);
-        
+
         // 2. Alice transfers control to Bob
         vm.prank(alice);
         registry.transferControl("alice", bob);
-        
+
         // 3. Bob updates recipient to Carol
         vm.prank(bob);
         registry.updateRecipient("alice", carol);
-        
+
         // 4. Bob transfers control back to Alice
         vm.prank(bob);
         registry.transferControl("alice", alice);
-        
+
         // Final verification
         IRegistry.UsernameData memory data = registry.getUsernameData("alice");
         assertEq(data.controller, alice);
@@ -215,15 +216,15 @@ contract AddressRegistryForkTest is ForkTestBaseV2 {
 
     function test_WhenCheckingGasUsageOnFork() external givenTestingRegistryDeployment {
         // It should have reasonable gas usage
-        
+
         uint256 gasBefore = gasleft();
         vm.prank(alice);
         registry.claimUsername("alice", alice);
         uint256 gasUsed = gasBefore - gasleft();
-        
+
         // Gas usage should be reasonable (less than 150k for simple claim)
         assertTrue(gasUsed < 150000, "Gas usage too high for username claim");
-        
+
         // Verify functionality still works
         assertEq(registry.getRecipient("alice"), alice);
     }

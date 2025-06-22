@@ -150,7 +150,8 @@ contract PaymentsPluginSetupV2Test is Test {
         IPluginSetup.SetupPayload memory payload =
             IPluginSetup.SetupPayload({plugin: plugin, currentHelpers: new address[](0), data: uninstallationParams});
 
-        PermissionLib.MultiTargetPermission[] memory permissions = pluginSetup.prepareUninstallation(address(dao), payload);
+        PermissionLib.MultiTargetPermission[] memory permissions =
+            pluginSetup.prepareUninstallation(address(dao), payload);
 
         assertEq(permissions.length, 2);
 
