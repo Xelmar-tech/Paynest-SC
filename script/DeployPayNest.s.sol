@@ -9,9 +9,9 @@ import {PluginRepo} from "@aragon/osx/framework/plugin/repo/PluginRepo.sol";
 import {hashHelpers, PluginSetupRef} from "@aragon/osx/framework/plugin/setup/PluginSetupProcessorHelpers.sol";
 import {ProxyLib} from "@aragon/osx-commons-contracts/src/utils/deployment/ProxyLib.sol";
 
-import {AddressRegistry} from "../src/AddressRegistry.sol";
-import {PaymentsPluginSetup} from "../src/setup/PaymentsPluginSetup.sol";
-import {PayNestDAOFactory} from "../src/factory/PayNestDAOFactory.sol";
+import {AddressRegistryV1} from "../src/v1/AddressRegistryV1.sol";
+import {PaymentsPluginV1Setup} from "../src/v1/setup/PaymentsPluginV1Setup.sol";
+import {PayNestDAOFactory} from "../src/v1/factory/PayNestDAOFactory.sol";
 import {DAOFactory} from "@aragon/osx/framework/dao/DAOFactory.sol";
 
 /**
@@ -31,8 +31,8 @@ contract DeployPayNestScript is Script {
     address llamaPayFactory;
 
     // Deployment artifacts
-    AddressRegistry public addressRegistry;
-    PaymentsPluginSetup public paymentsPluginSetup;
+    AddressRegistryV1 public addressRegistry;
+    PaymentsPluginV1Setup public paymentsPluginSetup;
     PluginRepo public paymentsPluginRepo;
     PayNestDAOFactory public payNestDAOFactory;
 
@@ -61,7 +61,7 @@ contract DeployPayNestScript is Script {
         // Load existing AddressRegistry deployment
         address existingRegistry = vm.envOr("ADDRESS_REGISTRY", address(0));
         if (existingRegistry != address(0)) {
-            addressRegistry = AddressRegistry(existingRegistry);
+            addressRegistry = AddressRegistryV1(existingRegistry);
             console2.log("Using existing AddressRegistry at:", address(addressRegistry));
         }
 
@@ -114,7 +114,7 @@ contract DeployPayNestScript is Script {
         } else {
             console2.log("   - Deploying new AddressRegistry...");
             // Deploy as UUPS proxy for upgradeability
-            addressRegistry = AddressRegistry(ProxyLib.deployUUPSProxy(address(new AddressRegistry()), ""));
+            addressRegistry = AddressRegistryV1(ProxyLib.deployUUPSProxy(address(new AddressRegistryV1()), ""));
             console2.log("   - AddressRegistry deployed at:", address(addressRegistry));
         }
 
@@ -126,7 +126,7 @@ contract DeployPayNestScript is Script {
         console2.log("2. Deploying PaymentsPlugin infrastructure...");
 
         // Deploy PaymentsPluginSetup
-        paymentsPluginSetup = new PaymentsPluginSetup();
+        paymentsPluginSetup = new PaymentsPluginV1Setup();
         vm.label(address(paymentsPluginSetup), "PaymentsPluginSetup");
         console2.log("   - PaymentsPluginSetup deployed at:", address(paymentsPluginSetup));
 
