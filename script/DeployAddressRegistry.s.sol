@@ -3,7 +3,7 @@ pragma solidity ^0.8.17;
 
 import {Script, console2} from "forge-std/Script.sol";
 import {Vm} from "forge-std/Vm.sol";
-import {AddressRegistry} from "../src/AddressRegistry.sol";
+import {AddressRegistryV1} from "../src/v1/AddressRegistryV1.sol";
 
 /**
  * This script deploys the AddressRegistry contract using CREATE2 for deterministic addresses
@@ -11,7 +11,7 @@ import {AddressRegistry} from "../src/AddressRegistry.sol";
  */
 contract DeployAddressRegistryScript is Script {
     address deployer;
-    AddressRegistry addressRegistry;
+    AddressRegistryV1 addressRegistry;
 
     // Salt for CREATE2 deployment (deterministic address)
     bytes32 constant SALT = keccak256("PayNest.AddressRegistry.v1.0.0");
@@ -42,7 +42,7 @@ contract DeployAddressRegistryScript is Script {
         console2.log("Deploying AddressRegistry...");
 
         // Deploy using CREATE2 for deterministic address
-        addressRegistry = new AddressRegistry{salt: SALT}();
+        addressRegistry = new AddressRegistryV1{salt: SALT}();
 
         console2.log("[SUCCESS] AddressRegistry deployed to:", address(addressRegistry));
         console2.log("");

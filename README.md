@@ -6,7 +6,7 @@
 
 [![License](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
 [![Base](https://img.shields.io/badge/Base-Deployed-green.svg)](https://basescan.org/address/0x5af13f848D21F93d5BaFF7D2bA74f29Ec2aD725B)
-[![Tests](https://img.shields.io/badge/Tests-213%20Passing-brightgreen.svg)](#testing-)
+[![Tests](https://img.shields.io/badge/Tests-350%2B%20Passing-brightgreen.svg)](#testing-)
 [![Coverage](https://img.shields.io/badge/Coverage-100%25-brightgreen.svg)](#testing-)
 [![Foundry](https://img.shields.io/badge/Built%20with-Foundry-orange.svg)](https://getfoundry.sh)
 [![Aragon](https://img.shields.io/badge/Built%20for-Aragon%20DAOs-purple.svg)](https://aragon.org)
@@ -32,10 +32,12 @@ PayNest is a comprehensive **Aragon DAO plugin** that revolutionizes how decentr
 ### 🎯 **Core Features**
 
 - **Username-Based Payments**: Pay `@alice` instead of `0x1234...`
+- **Smart Account UX**: Controller/recipient separation for gasless transactions
+- **Unlimited Payments**: Multiple streams + schedules per user
 - **Streaming Salaries**: Continuous token flow via LlamaPay
 - **Scheduled Payments**: Recurring payroll automation
 - **Multi-Token Support**: Any ERC-20 token
-- **Gas Optimized**: 69k gas per stream creation
+- **Meta-Transaction Support**: Gasless operations with EIP-712
 - **Cross-DAO Compatible**: Shared username registry
 
 </td>
@@ -43,11 +45,12 @@ PayNest is a comprehensive **Aragon DAO plugin** that revolutionizes how decentr
 
 ### 🏗️ **Architecture**
 
-- **PaymentsPlugin**: Core streaming & scheduling
-- **AddressRegistry**: Global username → address mapping
+- **PaymentsPlugin V2**: Unlimited payments per user
+- **AddressRegistry V2**: Controller/recipient separation
 - **PayNestDAOFactory**: One-click DAO + plugin setup
-- **LlamaPay Integration**: Battle-tested streaming infrastructure
-- **Aragon Framework**: Secure permission management
+- **LlamaPay Integration**: Flow-based streaming architecture
+- **Aragon Framework**: UUPS upgradeable plugins
+- **Meta-Transaction Support**: EIP-712 gasless operations
 
 </td>
 </tr>
@@ -59,10 +62,11 @@ PayNest is a comprehensive **Aragon DAO plugin** that revolutionizes how decentr
 
 | **Guide**                   | **Description**                   | **Link**                                                        |
 | --------------------------- | --------------------------------- | --------------------------------------------------------------- |
-| 🔧 **Technical Specs**      | Complete implementation details   | [Plugin Specification](./docs/specs/payments-plugin-spec.md)    |
-| 🦙 **LlamaPay Integration** | Streaming payment patterns        | [Integration Guide](./docs/guides/llamapay.md)                  |
-| 👤 **Username System**      | Address registry documentation    | [Registry Specification](./docs/specs/address-registry-spec.md) |
-| 🧪 **System Invariants**    | Mathematical correctness proofs   | [Invariants Guide](./docs/specs/system-invariants.md)           |
+| 🔧 **V2 Technical Specs**   | Enhanced V2 implementation        | [V2 Plugin Specification](./docs/specs/payments-plugin-v2-spec.md) |
+| 👤 **V2 Username System**   | Controller/recipient separation   | [V2 Registry Specification](./docs/specs/address-registry-v2-spec.md) |
+| 🏗️ **V2 Architecture**      | Smart account UX design          | [Controller/Recipient Architecture](./docs/controller-recipient-architecture.md) |
+| 🧪 **V2 System Invariants** | V2 mathematical proofs           | [V2 Invariants Guide](./docs/specs/system-invariants-v2-spec.md) |
+| 🦙 **LlamaPay Integration** | Flow-based streaming patterns     | [Integration Guide](./docs/guides/llamapay.md)                  |
 | 📋 **Usage Guide**          | Contract interactions & workflows | [Usage Documentation](./docs/guides/contracts-usage-guide.md)   |
 | 🏭 **DAO Factory**          | One-click DAO creation            | [Factory Specification](./docs/specs/dao-factory-spec.md)       |
 
@@ -108,136 +112,198 @@ ETHERSCAN_API_KEY="..." # For contract verification
 
 ## 💼 Core Functionality
 
-### 🌊 Streaming Payments
+### 🌊 V2 Enhanced Streaming Payments
 
-Create continuous token streams for salaries and recurring payments:
+Create unlimited token streams with flow-based architecture:
 
 ```solidity
-// Monthly salary stream to @alice
-plugin.createStream("alice", 5000e6, USDC, block.timestamp + 365 days);
+// Multiple salary streams for @alice
+plugin.createStream("alice", USDC, 5000e15);  // Base salary: 5000 USDC/sec
+plugin.createStream("alice", WETH, 1e15);     // Equity: 1 WETH/sec  
+plugin.createStream("alice", DAI, 500e15);    // Bonus: 500 DAI/sec
 
-// Alice can claim anytime
-uint256 payout = plugin.requestStreamPayout("alice");
-
-// Admin can adjust salary
-plugin.editStream("alice", 6000e6); // Give Alice a raise!
+// Alice can manage multiple streams
+bytes32[] memory streamIds = plugin.getUserStreams("alice");
+plugin.updateFlowRate("alice", streamIds[0], 6000e15); // Salary raise!
 ```
 
-### 📅 Scheduled Payments
+### 📅 Multiple Scheduled Payments
 
-Set up one-time or recurring payments:
+Set up unlimited recurring and one-time payments:
 
 ```solidity
-// Weekly allowance for @bob
+// Multiple payment types for @bob
 plugin.createSchedule(
     "bob",
-    500e6,                          // 500 USDC
     USDC,
+    500e6,                          // 500 USDC
     IntervalType.Weekly,
-    false,                          // recurring
+    false,                          // recurring weekly allowance
     block.timestamp + 7 days
 );
 
-// One-time project payment
 plugin.createSchedule(
-    "freelancer",
-    2500e6,                         // 2500 USDC
-    USDC,
-    IntervalType.Weekly,            // irrelevant for one-time
-    true,                           // one-time payment
+    "bob", 
+    WETH,
+    1e18,                           // 1 WETH
+    IntervalType.Monthly,
+    false,                          // recurring monthly bonus
+    block.timestamp + 30 days
+);
+
+plugin.createSchedule(
+    "bob",
+    DAI, 
+    2500e18,                        // 2500 DAI
+    IntervalType.Daily,             // irrelevant for one-time
+    true,                           // one-time project payment
     block.timestamp + 3 days
 );
 ```
 
-### 🔄 Stream Migration (Wallet Recovery)
+### 🧠 Smart Account UX (Controller/Recipient Separation)
 
-Users can migrate their own streams when changing wallets:
+V2 enables smart account users to sign transactions with one address while receiving payments at another:
 
 ```solidity
-// 1. Alice updates her address (new wallet)
-registry.updateUserAddress("alice", newWalletAddress);
+// Smart account setup: controller != recipient
+registry.claimUsername("alice", paymentWallet, smartAccountController);
 
-// 2. Alice migrates her stream (user-controlled)
-plugin.migrateStream("alice");
+// Controller manages settings (smart account with paymaster)
+vm.prank(smartAccountController);
+plugin.createStream("alice", USDC, 5000e15);
 
-// 3. Stream continues with new address automatically
+// Payments flow to separate wallet
+address recipient = registry.getRecipient("alice");  // paymentWallet
+address controller = registry.getController("alice"); // smartAccountController
+
+// Update payment destination without changing control
+vm.prank(smartAccountController);  
+registry.updateRecipient("alice", newPaymentWallet);
 ```
 
-### 👤 Username Management
+### 🔄 V2 Stream Migration (User-Controlled)
 
-Simple, human-readable payment addresses:
+Enhanced migration with controller/recipient separation:
 
 ```solidity
-// Claim username (one per address)
-registry.claimUsername("alice");
+// Alice updates payment destination (keeps control)
+vm.prank(smartAccountController);
+registry.updateRecipient("alice", newPaymentWallet);
 
-// Update address while keeping username
-registry.updateUserAddress("alice", newAddress);
+// Or transfer control to new smart account
+vm.prank(smartAccountController);
+registry.transferControl("alice", newSmartAccount);
 
-// Resolve username to current address
-address recipient = registry.getUserAddress("alice");
+// Alice migrates her streams (user-controlled)
+vm.prank(currentController);
+plugin.migrateUserStreams("alice");  // Migrates ALL streams
+```
+
+### 👤 V2 Enhanced Username Management
+
+Advanced username system with enhanced validation:
+
+```solidity
+// Claim with controller/recipient separation
+registry.claimUsername("alice", paymentAddress, controllerAddress);
+
+// V2 enhanced username validation (3-20 chars, stricter rules)
+registry.claimUsername("alice_dev", paymentAddr, controllerAddr); // ✅ Valid
+// registry.claimUsername("al", paymentAddr, controllerAddr);     // ❌ Too short
+// registry.claimUsername("alice__dev", paymentAddr, controllerAddr); // ❌ Consecutive underscores
+
+// Gasless username registration with meta-transactions
+registry.claimUsernameWithSignature(
+    "alice",
+    paymentAddress,
+    controllerAddress, 
+    deadline,
+    v, r, s  // EIP-712 signature
+);
+
+// Backward compatibility
+address recipient = registry.getUserAddress("alice");  // Returns recipient (V1 compatible)
 ```
 
 ---
 
 ## 🧪 Testing 🔍
 
-PayNest features **production-grade testing** with 213 comprehensive tests across multiple layers:
+PayNest features **production-grade testing** with **350+ comprehensive tests** across V1 and V2 implementations:
 
-### Test Architecture
+### V2 Enhanced Test Architecture
 
 <table>
 <tr>
 <td width="33%">
 
-#### ⚡ **Unit Tests**
+#### ⚡ **V2 Unit Tests**
 
-_130+ tests_
+_133 tests_
 
-- ✅ Fast development feedback
-- ✅ Mock contracts for isolation
-- ✅ Edge case coverage
-- ✅ Gas optimization verification
-
-</td>
-<td width="33%">
-
-#### 🌐 **Fork Tests**
-
-_33 tests_
-
-- ✅ **Zero mocking** - 100% real contracts
-- ✅ Base mainnet integration
-- ✅ Production-ready validation
-- ✅ Real USDC + LlamaPay testing
+- ✅ Controller/recipient separation testing
+- ✅ Multiple payment flows validation
+- ✅ Meta-transaction support coverage
+- ✅ Enhanced username validation
+- ✅ ERC1967Proxy pattern testing
 
 </td>
 <td width="33%">
 
-#### 🔄 **Invariant Tests**
+#### 🌐 **V2 Fork Tests**
 
-_39 tests_
+_28 tests_
 
-- ✅ **33M+ function calls**
-- ✅ Property-based testing
-- ✅ Mathematical correctness
-- ✅ State consistency proofs
+- ✅ **Real Base mainnet contracts**
+- ✅ Smart account UX validation
+- ✅ Production LlamaPay integration
+- ✅ End-to-end system testing
+- ✅ V2 flow-based streaming
+
+</td>
+<td width="33%">
+
+#### 🔄 **V2 Invariant Tests**
+
+_28 tests_
+
+- ✅ **Property-based V2 testing**
+- ✅ Controller/recipient consistency
+- ✅ Multiple payment invariants
+- ✅ System-wide integration proofs
+- ✅ V2 username validation
 
 </td>
 </tr>
 </table>
 
+### Comprehensive Test Coverage
+
+**Total Test Suite: 350+ tests**
+- **V1 Tests**: 161 tests (legacy/production validation)
+- **V2 Tests**: 189 tests (enhanced features)
+- **Coverage**: Unit + Fork + Invariant testing
+- **Integration**: Real Base mainnet validation
+
 ### Running Tests
 
 ```bash
-# Quick unit tests (130+ tests, ~30s)
-make test
+# V2 unit tests (133 tests, fast)
+forge test --match-path "test/v2/unit/*.sol"
 
-# Production fork tests (33 tests, ~2min)
-make test-fork
+# V2 fork tests (28 tests, Base mainnet)
+forge test --match-path "test/v2/fork-tests/*.sol"
 
-# All tests including invariants (213 tests, ~5min)
+# V2 invariant tests (28 tests, property-based)
+FOUNDRY_INVARIANT_RUNS=10 forge test --match-contract ".*InvariantsV2"
+
+# All V1 + V2 tests (350+ tests)
 forge test
+
+# Quick V2 overview
+make test  # Runs all unit tests (V1 + V2)
+make test-fork  # Runs all fork tests (V1 + V2)
 
 # Generate coverage report
 make test-coverage
@@ -358,7 +424,7 @@ PayNestDAOFactory factory = PayNestDAOFactory(0x5af13f848D21F93d5BaFF7D2bA74f29E
 
 ---
 
-## 💡 Benefits for Teams
+## 💡 V2 Enhanced Benefits for Teams
 
 <table>
 <tr>
@@ -366,22 +432,26 @@ PayNestDAOFactory factory = PayNestDAOFactory(0x5af13f848D21F93d5BaFF7D2bA74f29E
 
 ### 👥 **For Contributors**
 
-- ✅ **Simple Onboarding**: Just claim a username
-- ✅ **Flexible Payments**: Streams or scheduled payments
-- ✅ **Self-Service**: Claim payments when convenient
-- ✅ **Wallet Recovery**: Migrate streams to new addresses
+- ✅ **Smart Account UX**: Sign with smart account, receive payments anywhere
+- ✅ **Multiple Income Streams**: Unlimited streams + schedules per user
+- ✅ **Gasless Operations**: Meta-transaction support (EIP-712)
+- ✅ **Flexible Control**: Separate payment destination from control address
+- ✅ **Enhanced Security**: Controller/recipient separation
 - ✅ **Real-Time Payments**: Access funds as they accrue
+- ✅ **User-Controlled Migration**: Move streams between wallets safely
 
 </td>
 <td width="50%">
 
 ### 💼 **For DAO Operators**
 
-- ✅ **Automated Payroll**: Set and forget recurring payments
-- ✅ **Gas Efficiency**: Leverage LlamaPay's optimizations
-- ✅ **Multi-Token Support**: Pay in any ERC-20 token
-- ✅ **Transparent Tracking**: All payments on-chain
-- ✅ **Reduced Admin**: Eliminate manual payment processing
+- ✅ **Complex Compensation**: Multiple payment types per contributor
+- ✅ **Smart Account Ready**: Perfect for Account Abstraction wallets
+- ✅ **Flow-Based Streaming**: Aligned with LlamaPay's natural design
+- ✅ **Unlimited Scale**: No artificial payment limits per user
+- ✅ **Enhanced Username System**: Stricter validation, better UX
+- ✅ **Multi-Token Payroll**: USDC salary + WETH equity + DAI bonuses
+- ✅ **Production Tested**: 350+ tests including real Base mainnet validation
 
 </td>
 </tr>
@@ -393,12 +463,15 @@ PayNestDAOFactory factory = PayNestDAOFactory(0x5af13f848D21F93d5BaFF7D2bA74f29E
 
 ### Audit Status
 
-PayNest has undergone comprehensive security review:
+PayNest has undergone comprehensive security review with enhanced V2 testing:
 
-- ✅ **213 Test Coverage** (100% passing)
-- ✅ **33M+ Invariant Test Calls** (mathematical verification)
-- ✅ **Real Contract Integration** (Base mainnet testing)
-- ✅ **Battle-Tested Dependencies** (Aragon OSx, LlamaPay)
+- ✅ **350+ Test Coverage** (V1 + V2, 100% passing)
+- ✅ **V2 Enhanced Security**: Controller/recipient separation validation
+- ✅ **Real Contract Integration** (Base mainnet fork testing)
+- ✅ **Property-Based Testing** (Invariant tests with millions of function calls)
+- ✅ **Meta-Transaction Security** (EIP-712 signature validation)
+- ✅ **Battle-Tested Dependencies** (Aragon OSx, LlamaPay, OpenZeppelin)
+- ✅ **Smart Account Compatibility** (Production-tested UX patterns)
 
 ### Report Security Issues
 
