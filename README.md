@@ -82,8 +82,8 @@ brew install make
 
 ```bash
 # Clone and setup
-git clone https://github.com/your-org/paynest
-cd paynest
+git clone https://github.com/Xelmar-tech/Paynest-SC.git
+cd Paynest-SC
 cp .env.example .env
 make init
 forge build

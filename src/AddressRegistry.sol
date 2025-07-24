@@ -10,7 +10,7 @@ contract AddressRegistry is IRegistry {
     /// @notice Maps usernames to their address history
     mapping(string => AddressHistory) public userAddresses;
 
-    /// @notice Maps addresses to their claimed usernames
+    /// @notice Maps addresses to their claimed username
     mapping(address => string) public addressToUsername;
 
     /// @notice Custom errors for gas-efficient error handling
