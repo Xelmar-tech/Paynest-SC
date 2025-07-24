@@ -21,9 +21,9 @@ _Stream salaries, schedule payments, and manage contributors with human-readable
 
 </div>
 
-## ✨ What is PayNest?
+## ✨ What is Paynest?
 
-PayNest is a comprehensive **Aragon DAO plugin** that revolutionizes how decentralized organizations handle payments. Say goodbye to copying wallet addresses and manual payment processing—PayNest brings traditional payroll systems to the blockchain with modern UX.
+Paynest is a comprehensive **Aragon DAO plugin** that revolutionizes how decentralized organizations handle payments. Say goodbye to copying wallet addresses and manual payment processing—PayNest brings traditional payroll systems to the blockchain with modern UX.
 
 <table>
 <tr>
@@ -182,7 +182,7 @@ address recipient = registry.getUserAddress("alice");
 
 ## 🧪 Testing 🔍
 
-PayNest features **production-grade testing** with 213 comprehensive tests across multiple layers:
+Paynest features **production-grade testing** with 213 comprehensive tests across multiple layers:
 
 ### Test Architecture
 
@@ -402,7 +402,7 @@ PayNest has undergone comprehensive security review:
 
 ### Report Security Issues
 
-🚨 **Security Contact**: [security@paynest.xyz](mailto:security@paynest.xyz)
+🚨 **Security Contact**: [rex@paynest.xyz](mailto:rex@paynest.xyz)
 
 Please **do not** use public issue tracking for security vulnerabilities.
 
@@ -436,6 +436,6 @@ This project is licensed under **AGPL-3.0-or-later** - see the [./LICENSE](LICEN
 
 <div align="center">
   <sub>
-    PayNest is built on <a href="https://aragon.org">Aragon OSx</a> and integrates with <a href="https://llamapay.io">LlamaPay</a>
+    Paynest is built on <a href="https://aragon.org">Aragon OSx</a> and integrates with <a href="https://llamapay.io">LlamaPay</a>
   </sub>
 </div>
